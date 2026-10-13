@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# New York Bel Arabi | نيويورك بالعربي
 
-## Getting Started
+An Arabic-language digital news platform covering New York City.
 
-First, run the development server:
+## About the Project
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+New York Bel Arabi is a web application designed to provide New York City news and local information to Arabic-speaking residents.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The platform is currently under development.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- PostgreSQL (Neon)
+- Prisma ORM
+- Auth.js / Google OAuth
 
-## Learn More
+## Features Implemented
 
-To learn more about Next.js, take a look at the following resources:
+- Arabic, right-to-left (RTL) website interface
+- Responsive homepage
+- PostgreSQL database integration
+- Google authentication for administrators
+- Protected administration dashboard
+- Article search and status filtering
+- Article statistics
+- Publish and unpublish articles
+- Permanent article deletion with confirmation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Planned Features
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Article creation and editing
+- Rich-text article editor
+- Individual article pages
+- News source integration
+- AI-assisted Arabic news drafting with editorial review
+- Search engine optimization (SEO)
+- Production deployment
 
-## Deploy on Vercel
+## Security
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Environment variables and API credentials are excluded from Git version control. Administrative article operations require server-side authorization.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project Status
+
+Under active development.
+
+## Language
+
+Arabic (RTL), with English used for technical documentation.
