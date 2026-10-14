@@ -3,9 +3,12 @@ import { auth } from "../../auth";
 import { redirect } from "next/navigation";
 import ArticlesDashboard from "./ArticlesDashboard";
 
+import { connection } from "next/server";
 export const instant = false;
 
 export default async function AdminPage() {
+  await connection();
+
   const session = await auth();
 
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();

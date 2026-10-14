@@ -1,6 +1,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import {
   publishArticle,
@@ -18,27 +19,25 @@ type Article = {
   createdAt: string;
 };
 
-type Props = {
-  articles: Article[];
-};
-
 type Filter = "ALL" | "DRAFT" | "PUBLISHED";
 
-export default function ArticlesDashboard({ articles }: Props) {
+export default function ArticlesDashboard({
+  articles,
+}: {
+  articles: Article[];
+}) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
   const [isPending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
-  const total = articles.length;
-
   const published = articles.filter(
-    (article) => article.status === "PUBLISHED"
+    (a) => a.status === "PUBLISHED"
   ).length;
 
   const drafts = articles.filter(
-    (article) => article.status === "DRAFT"
+    (a) => a.status === "DRAFT"
   ).length;
 
   const filteredArticles = useMemo(() => {
@@ -67,7 +66,7 @@ export default function ArticlesDashboard({ articles }: Props) {
       try {
         await action(id);
       } catch {
-        setError("تعذر تنفيذ العملية. يرجى المحاولة مرة أخرى.");
+        setError("تعذر تنفيذ العملية. حاولي مرة أخرى.");
       } finally {
         setBusyId(null);
       }
@@ -77,11 +76,13 @@ export default function ArticlesDashboard({ articles }: Props) {
   function handleDelete(id: number, title: string) {
     if (isPending) return;
 
-    const confirmed = window.confirm(
-      `هل أنتِ متأكدة من حذف الخبر نهائيًا؟\n\n${title}\n\nلا يمكن التراجع عن الحذف.`
-    );
-
-    if (!confirmed) return;
+    if (
+      !window.confirm(
+        `حذف الخبر نهائيًا؟\n\n${title}\n\nلا يمكن التراجع عن الحذف.`
+      )
+    ) {
+      return;
+    }
 
     runAction(id, deleteArticle);
   }
@@ -98,67 +99,60 @@ export default function ArticlesDashboard({ articles }: Props) {
       className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900 sm:px-8"
     >
       <div className="mx-auto max-w-6xl">
-        <header className="mb-8">
-          <p className="mb-2 text-sm font-semibold text-amber-600">
-            NEW YORK BEL ARABI
-          </p>
+        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-amber-600">
+              NEW YORK BEL ARABI
+            </p>
+            <h1 className="text-3xl font-bold">
+              لوحة إدارة الأخبار
+            </h1>
+            <p className="mt-2 text-zinc-500">
+              إنشاء الأخبار ومراجعتها ونشرها
+            </p>
+          </div>
 
-          <h1 className="text-3xl font-bold">
-            لوحة إدارة الأخبار
-          </h1>
-
-          <p className="mt-2 text-zinc-500">
-            مراجعة ونشر وإدارة أخبار نيويورك بالعربي
-          </p>
+          <Link
+            href="/admin/new"
+            className="rounded-xl bg-zinc-900 px-5 py-3 font-semibold text-white hover:bg-zinc-700"
+          >
+            + إضافة خبر جديد
+          </Link>
         </header>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
-          <StatCard
-            label="إجمالي الأخبار"
-            value={total}
-            color="text-zinc-900"
-          />
-
-          <StatCard
-            label="الأخبار المنشورة"
-            value={published}
-            color="text-green-700"
-          />
-
-          <StatCard
-            label="المسودات"
-            value={drafts}
-            color="text-amber-600"
-          />
+          <StatCard label="إجمالي الأخبار" value={articles.length} />
+          <StatCard label="المنشورة" value={published} />
+          <StatCard label="المسودات" value={drafts} />
         </section>
 
         <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-xl font-bold">
-              إدارة الأخبار
+              قائمة الأخبار
             </h2>
 
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="ابحثي عن عنوان خبر..."
+              placeholder="ابحثي عن خبر..."
               aria-label="البحث عن الأخبار"
-              className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-amber-500 lg:max-w-sm"
+              className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-amber-500 sm:max-w-xs"
             />
           </div>
 
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div className="mb-5 flex flex-wrap gap-2">
             {filters.map((item) => (
               <button
                 key={item.value}
                 type="button"
                 onClick={() => setFilter(item.value)}
                 aria-pressed={filter === item.value}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                className={`rounded-lg px-4 py-2 text-sm ${
                   filter === item.value
                     ? "bg-zinc-900 text-white"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                    : "bg-zinc-100 text-zinc-600"
                 }`}
               >
                 {item.label}
@@ -169,7 +163,7 @@ export default function ArticlesDashboard({ articles }: Props) {
           {error && (
             <p
               role="alert"
-              className="mb-5 rounded-lg bg-red-50 p-4 text-sm text-red-700"
+              className="mb-4 rounded-lg bg-red-50 p-4 text-red-700"
             >
               {error}
             </p>
@@ -180,9 +174,9 @@ export default function ArticlesDashboard({ articles }: Props) {
           </p>
 
           {filteredArticles.length === 0 ? (
-            <div className="rounded-xl bg-zinc-50 p-10 text-center text-zinc-500">
-              لا توجد أخبار مطابقة للبحث.
-            </div>
+            <p className="rounded-xl bg-zinc-50 p-8 text-center text-zinc-500">
+              لا توجد أخبار مطابقة.
+            </p>
           ) : (
             <div className="space-y-4">
               {filteredArticles.map((article) => (
@@ -195,9 +189,7 @@ export default function ArticlesDashboard({ articles }: Props) {
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${
                         article.status === "PUBLISHED"
                           ? "bg-green-50 text-green-700"
-                          : article.status === "DRAFT"
-                            ? "bg-amber-50 text-amber-700"
-                            : "bg-zinc-100 text-zinc-600"
+                          : "bg-amber-50 text-amber-700"
                       }`}
                     >
                       {article.status === "PUBLISHED"
@@ -211,7 +203,7 @@ export default function ArticlesDashboard({ articles }: Props) {
                       {article.category}
                     </span>
 
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-zinc-500">
                       {article.borough}
                     </span>
                   </div>
@@ -221,10 +213,10 @@ export default function ArticlesDashboard({ articles }: Props) {
                   </h3>
 
                   <p className="mt-2 text-sm leading-7 text-zinc-600">
-                    {article.summary || "لا يوجد ملخص لهذا الخبر."}
+                    {article.summary || "لا يوجد ملخص."}
                   </p>
 
-                  <div className="mt-4 text-xs text-zinc-400">
+                  <p className="mt-3 text-xs text-zinc-400">
                     تاريخ الإضافة:{" "}
                     {new Date(article.createdAt).toLocaleDateString(
                       "ar",
@@ -235,9 +227,16 @@ export default function ArticlesDashboard({ articles }: Props) {
                         timeZone: "America/New_York",
                       }
                     )}
-                  </div>
+                  </p>
 
                   <div className="mt-5 flex flex-wrap gap-3 border-t border-zinc-100 pt-4">
+                    <Link
+                      href={`/admin/edit/${article.id}`}
+                      className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold hover:bg-zinc-50"
+                    >
+                      تعديل الخبر
+                    </Link>
+
                     {article.status === "DRAFT" && (
                       <button
                         type="button"
@@ -245,7 +244,7 @@ export default function ArticlesDashboard({ articles }: Props) {
                         onClick={() =>
                           runAction(article.id, publishArticle)
                         }
-                        className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50"
+                        className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       >
                         {isPending && busyId === article.id
                           ? "جارٍ التنفيذ..."
@@ -260,7 +259,7 @@ export default function ArticlesDashboard({ articles }: Props) {
                         onClick={() =>
                           runAction(article.id, unpublishArticle)
                         }
-                        className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+                        className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       >
                         {isPending && busyId === article.id
                           ? "جارٍ التنفيذ..."
@@ -274,7 +273,7 @@ export default function ArticlesDashboard({ articles }: Props) {
                       onClick={() =>
                         handleDelete(article.id, article.title)
                       }
-                      className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
                     >
                       حذف نهائي
                     </button>
@@ -292,19 +291,14 @@ export default function ArticlesDashboard({ articles }: Props) {
 function StatCard({
   label,
   value,
-  color,
 }: {
   label: string;
   value: number;
-  color: string;
 }) {
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
       <p className="text-sm text-zinc-500">{label}</p>
-
-      <p className={`mt-3 text-3xl font-bold ${color}`}>
-        {value}
-      </p>
+      <p className="mt-3 text-3xl font-bold">{value}</p>
     </div>
   );
 }

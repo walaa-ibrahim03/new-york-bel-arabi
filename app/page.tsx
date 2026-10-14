@@ -64,7 +64,7 @@ const databaseNews = publishedArticles.map((article) => ({
             aria-label="نيويورك بالعربي - الرئيسية"
           >
             <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-amber-400 text-3xl font-black text-black shadow-sm">
-              ن
+              
             </div>
 
             <div>
@@ -229,8 +229,10 @@ const databaseNews = publishedArticles.map((article) => ({
                   </div>
 
                   <h3 className="text-lg font-black leading-8 transition-colors group-hover:text-amber-700">
-                    {news.title}
-                  </h3>
+  <Link href={`/news/${news.id}`}>
+    {news.title}
+  </Link>
+</h3>
 
                   <p className="mt-3 text-sm leading-7 text-zinc-600">
                     {news.summary}
