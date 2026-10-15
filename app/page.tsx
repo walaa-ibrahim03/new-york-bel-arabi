@@ -1,331 +1,402 @@
 
 import Link from "next/link";
-import { latestNews } from "../data/news";
 import { prisma } from "../lib/prisma";
 
+export const instant = false;
 
-const boroughs = [
-  { name: "مانهاتن", english: "Manhattan" },
-  { name: "بروكلين", english: "Brooklyn" },
-  { name: "كوينز", english: "Queens" },
-  { name: "برونكس", english: "Bronx" },
-  { name: "ستاتن آيلاند", english: "Staten Island" },
+const sections = [
+  {
+    id: "immigration",
+    title: "الهجرة والإقامة",
+    description: "الجنسية، الإقامة، التأشيرات، اللجوء ولمّ الشمل",
+    categories: ["الهجرة", "الهجرة والإقامة"],
+    symbol: "◈",
+  },
+  {
+    id: "benefits",
+    title: "المساعدات الحكومية",
+    description: "SNAP، Medicaid، دعم السكن والمساعدات المالية",
+    categories: ["المساعدات", "المساعدات الحكومية", "السكن"],
+    symbol: "✦",
+  },
+  {
+    id: "community",
+    title: "الجالية العربية والمسلمة",
+    description: "أخبار الجالية، المؤسسات، الفعاليات والمبادرات",
+    categories: ["الجالية", "الجالية العربية والمسلمة"],
+    symbol: "◆",
+  },
+  {
+    id: "family",
+    title: "المدارس والعائلة",
+    description: "أخبار المدارس، برامج الأطفال والخدمات العائلية",
+    categories: ["تعليم", "المدارس والعائلة"],
+    symbol: "✳",
+  },
 ];
 
-const navigation = [
-  { name: "الرئيسية", href: "#home" },
-  { name: "آخر الأخبار", href: "#latest" },
-  { name: "مناطق نيويورك", href: "#boroughs" },
-  { name: "الاقتصاد", href: "#economy" },
-  { name: "المجتمع العربي", href: "#community" },
-];
-  export const instant = false;
-  export default async function Home() {
-    const publishedArticles = await prisma.article.findMany({
-  where: {
-    status: "PUBLISHED",
-  },
-  orderBy: {
-    publishedAt: "desc",
-  },
-});
-const databaseNews = publishedArticles.map((article) => ({
-  id: article.id,
-  category: article.category,
-  borough: article.borough,
-  title: article.title,
-  summary: article.summary,
-  color: article.color,
-  image: article.imageUrl,
-}));
+type NewsItem = {
+  id: number;
+  title: string;
+  summary: string;
+  category: string;
+  borough: string;
+  imageUrl: string | null;
+  publishedAt: Date | null;
+};
+
+function ArticleCard({ article }: { article: NewsItem }) {
+  return (
+    <article className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white transition-shadow hover:shadow-md">
+      {article.imageUrl ? (
+        <div className="h-44 overflow-hidden bg-zinc-100">
+          {/* صورة تستخدم فقط إذا أضيف رابطها بعد مراجعة حقوق الاستخدام */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={article.imageUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+      ) : (
+        <div className="flex h-32 items-center justify-center bg-slate-100">
+          <span className="text-2xl font-black text-slate-400">
+            نيويورك بالعربي
+          </span>
+        </div>
+      )}
+
+      <div className="p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-amber-100 px-3 py-1 font-bold text-amber-900">
+            {article.category}
+          </span>
+          <span className="text-zinc-500">{article.borough}</span>
+        </div>
+
+        <h3 className="text-lg font-bold leading-8 transition-colors group-hover:text-amber-700">
+          <Link href={`/news/${article.id}`} dir="auto">
+            {article.title}
+          </Link>
+        </h3>
+
+        {article.summary && (
+          <p
+            dir="auto"
+            className="mt-3 line-clamp-3 text-sm leading-7 text-zinc-600"
+          >
+            {article.summary}
+          </p>
+        )}
+
+        <Link
+          href={`/news/${article.id}`}
+          className="mt-5 inline-block text-sm font-bold text-amber-700 hover:underline"
+        >
+          اقرأ الخبر ←
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+export default async function Home() {
+  const articles: NewsItem[] = await prisma.article.findMany({
+    where: {
+      status: "PUBLISHED",
+    },
+    orderBy: [
+      { publishedAt: "desc" },
+      { createdAt: "desc" },
+    ],
+    select: {
+      id: true,
+      title: true,
+      summary: true,
+      category: true,
+      borough: true,
+      imageUrl: true,
+      publishedAt: true,
+    },
+  });
+
+  const priorityCategories = sections.flatMap(
+    (section) => section.categories
+  );
+
+  const featured =
+    articles.find((article) =>
+      priorityCategories.includes(article.category)
+    ) ?? articles[0];
+
+  const latestArticles = articles
+    .filter((article) => article.id !== featured?.id)
+    .slice(0, 6);
 
   return (
     <div
-      id="home"
       dir="rtl"
-      className="min-h-screen bg-[#fafafa] text-zinc-900"
+      className="min-h-screen bg-[#f8fafc] text-slate-900"
     >
       {/* Top bar */}
-      <div className="bg-zinc-950 text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-2.5 text-xs sm:px-8">
-          <span>نيويورك بالعربي | أخبار مدينتنا... بلغتنا</span>
-          <span className="hidden text-zinc-400 sm:inline">
-            منصة إخبارية عربية مستقلة
+      <div className="bg-slate-950 text-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-xs sm:px-8">
+          <span>نيويورك بالعربي</span>
+          <span className="text-slate-300">
+            أخبار مدينتك، خدمات تهمك، وقصص من جاليتنا
           </span>
         </div>
       </div>
 
       {/* Header */}
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-5 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
-          <Link
-            href="/"
-            className="flex w-fit items-center gap-3"
-            aria-label="نيويورك بالعربي - الرئيسية"
-          >
-            <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-amber-400 text-3xl font-black text-black shadow-sm">
-              
-            </div>
-
-            <div>
-              <div className="text-2xl font-black tracking-tight sm:text-3xl">
-                نيويورك{" "}
-                <span className="text-amber-500">بالعربي</span>
-              </div>
-              <p className="mt-0.5 text-xs text-zinc-500">
-                أخبار مدينتنا... بلغتنا
-              </p>
-            </div>
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
+          <Link href="/" className="inline-block">
+            <span className="text-3xl font-black tracking-tight">
+              نيويورك{" "}
+              <span className="text-amber-500">بالعربي</span>
+            </span>
+            <span className="mt-2 block text-sm text-slate-500">
+              منصتك العربية لأخبار نيويورك
+            </span>
           </Link>
-
-          <nav
-            aria-label="القائمة الرئيسية"
-            className="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm font-semibold"
-          >
-            {navigation.map((item, index) => (
-              <a
-                key={item.name}
-                href={item.href}
-                className={`border-b-2 pb-1 transition-colors hover:text-amber-600 ${
-                  index === 0
-                    ? "border-amber-400 text-black"
-                    : "border-transparent text-zinc-600"
-                }`}
-              >
-                {item.name}
-              </a>
-            ))}
-          </nav>
         </div>
+
+        <nav
+          aria-label="القائمة الرئيسية"
+          className="border-t border-slate-100"
+        >
+          <div className="mx-auto flex max-w-7xl flex-wrap gap-x-6 gap-y-3 px-5 py-4 text-sm font-semibold sm:px-8">
+            <a href="#home" className="hover:text-amber-700">
+              الرئيسية
+            </a>
+            <a href="#immigration" className="hover:text-amber-700">
+              الهجرة
+            </a>
+            <a href="#benefits" className="hover:text-amber-700">
+              المساعدات
+            </a>
+            <a href="#community" className="hover:text-amber-700">
+              الجالية
+            </a>
+            <a href="#family" className="hover:text-amber-700">
+              المدارس والعائلة
+            </a>
+            <a href="#latest" className="hover:text-amber-700">
+              آخر الأخبار
+            </a>
+          </div>
+        </nav>
       </header>
 
-      <main className="mx-auto max-w-7xl px-5 pb-16 sm:px-8">
-        {/* Notice */}
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-950">
-          هذه نسخة تجريبية لتصميم الموقع. العناوين أدناه أمثلة
-          توضيحية وليست أخبارًا منشورة أو مؤكدة.
-        </div>
+      <main
+        id="home"
+        className="mx-auto max-w-7xl px-5 pb-20 sm:px-8"
+      >
+        {/* Featured */}
+        <section className="grid gap-6 py-10 lg:grid-cols-[1.65fr_1fr]">
+          <div className="flex min-h-[350px] flex-col justify-end rounded-3xl bg-slate-950 p-7 text-white sm:p-10">
+            <span className="mb-5 w-fit rounded-full bg-amber-400 px-4 py-1.5 text-xs font-bold text-slate-950">
+              {featured ? "أبرز الأخبار" : "مرحبًا بكم"}
+            </span>
 
-        {/* Hero */}
-        <section
-          aria-labelledby="featured-heading"
-          className="grid gap-5 py-8 lg:grid-cols-[minmax(0,1.8fr)_minmax(280px,1fr)]"
-        >
-<div
-  className="relative flex min-h-[370px] flex-col justify-end overflow-hidden rounded-3xl bg-zinc-950 bg-cover bg-center p-7 text-white shadow-sm sm:p-10"
-  style={{
-    backgroundImage:
-      "linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.15)), url('/brooklyn-bridge.jpg')",
-  }}
->            <div
-              aria-hidden="true"
-              className="absolute -left-16 -top-16 h-64 w-64 rounded-full bg-amber-400/15 blur-3xl"
-            />
+            {featured ? (
+              <>
+                <h1
+                  dir="auto"
+                  className="text-2xl font-black leading-relaxed sm:text-4xl"
+                >
+                  {featured.title}
+                </h1>
 
-            <div className="relative z-10">
-              <span className="inline-flex rounded-full bg-amber-400 px-4 py-1.5 text-xs font-bold text-black">
-                أبرز الأخبار
-              </span>
+                <p
+                  dir="auto"
+                  className="mt-4 line-clamp-3 text-sm leading-8 text-slate-300"
+                >
+                  {featured.summary}
+                </p>
 
-              <h1
-                id="featured-heading"
-                className="mt-5 max-w-2xl text-3xl font-black leading-[1.5] sm:text-4xl"
-              >
-                نيويورك بالعربي
-                <span className="mt-1 block text-amber-400">
-                  نافذتك على أخبار المدينة
-                </span>
-              </h1>
+                <Link
+                  href={`/news/${featured.id}`}
+                  className="mt-7 w-fit rounded-xl bg-amber-400 px-6 py-3 text-sm font-bold text-black hover:bg-amber-300"
+                >
+                  اقرأ التفاصيل ←
+                </Link>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl font-black leading-relaxed sm:text-4xl">
+                  أخبار نيويورك التي تهمك، بالعربي
+                </h1>
 
-              <p className="mt-5 max-w-xl text-sm leading-8 text-zinc-300 sm:text-base">
-                الأخبار المحلية، المواصلات، الاقتصاد، المجتمع العربي
-                والخدمات التي تهم سكان نيويورك، في مكان واحد
-                وباللغة العربية.
-              </p>
+                <p className="mt-5 max-w-xl text-sm leading-8 text-slate-300">
+                  نتابع أخبار الهجرة والمساعدات الحكومية والجالية
+                  العربية والمسلمة، إلى جانب المدارس والخدمات
+                  والأحداث المهمة في نيويورك.
+                </p>
 
-              <a
-                href="#latest"
-                className="mt-7 inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-bold text-black transition-colors hover:bg-amber-300"
-              >
-                تصفح آخر الأخبار ←
-              </a>
-            </div>
+                <p className="mt-5 text-sm text-amber-300">
+                  لا توجد أخبار منشورة بعد.
+                </p>
+              </>
+            )}
           </div>
 
-          {/* Side panel */}
-          <aside className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-black">على رادار نيويورك</h2>
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+          {/* Focus areas */}
+          <aside className="rounded-3xl border border-slate-200 bg-white p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-black">
+                المواضيع التي تهمنا
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                تابع الأخبار حسب اهتماماتك.
+              </p>
             </div>
 
-            <p className="mt-2 text-sm text-zinc-500">
-              الموضوعات التي نتابعها
-            </p>
-
-            <div className="mt-6 divide-y divide-zinc-100">
-              {latestNews.slice(0, 4).map((news, index) => (
-                <div key={news.id} className="flex gap-4 py-4">
-                  <span className="text-2xl font-black text-amber-500">
-                    {String(index + 1).padStart(2, "0")}
+            <div className="divide-y divide-slate-100">
+              {sections.map((section) => (
+                <a
+                  key={section.id}
+                  href={`#${section.id}`}
+                  className="flex items-center gap-4 py-4 hover:text-amber-700"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xl text-amber-800">
+                    {section.symbol}
                   </span>
-
-                  <div>
-                    <p className="text-xs font-semibold text-zinc-500">
-                      {news.category}
-                    </p>
-                    <h3 className="mt-1 text-sm font-bold leading-7">
-                      {news.title}
-                    </h3>
-                  </div>
-                </div>
+                  <span>
+                    <span className="block font-bold">
+                      {section.title}
+                    </span>
+                    <span className="mt-1 block text-xs leading-6 text-slate-500">
+                      {section.description}
+                    </span>
+                  </span>
+                </a>
               ))}
             </div>
           </aside>
         </section>
 
-        {/* Latest news */}
-        <section id="latest" className="scroll-mt-8 py-8">
-          <div className="mb-7 flex items-center justify-between gap-4">
-            <div>
-              <div className="mb-2 h-1 w-12 rounded-full bg-amber-400" />
-              <h2 className="text-2xl font-black sm:text-3xl">
-                آخر الأخبار
+        {/* Quick topic tiles */}
+        <section
+          aria-label="أقسام الموقع"
+          className="grid gap-4 py-5 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          {sections.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              className="rounded-2xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-md"
+            >
+              <span className="text-3xl text-amber-600">
+                {section.symbol}
+              </span>
+              <h2 className="mt-4 text-lg font-black">
+                {section.title}
               </h2>
-            </div>
-            <span className="text-xs text-zinc-500">
-              محتوى تجريبي
-            </span>
-          </div>
-
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {databaseNews.map((news) => (
-              <article
-                key={news.id}
-                className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-shadow hover:shadow-md"
-              >
-                <div className={`relative h-48 overflow-hidden ${news.color}`}>
-  {"image" in news && news.image ? (
-    <img
-      src={news.image}
-      alt={news.title}
-      className="h-full w-full object-cover"
-    />
-  ) : (
-    <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-      صورة توضيحية للخبر
-    </div>
-  )}
-</div>
-
-                <div className="p-6">
-                  <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
-                      {news.category}
-                    </span>
-                    <span className="text-xs text-zinc-400">
-                      {news.borough}
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-black leading-8 transition-colors group-hover:text-amber-700">
-  <Link href={`/news/${news.id}`}>
-    {news.title}
-  </Link>
-</h3>
-
-                  <p className="mt-3 text-sm leading-7 text-zinc-600">
-                    {news.summary}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
+              <p className="mt-2 text-sm leading-7 text-slate-500">
+                {section.description}
+              </p>
+              <span className="mt-4 block text-sm font-semibold text-amber-700">
+                تصفح القسم ←
+              </span>
+            </a>
+          ))}
         </section>
 
-        {/* Boroughs */}
-        <section id="boroughs" className="scroll-mt-8 py-10">
-          <div className="mb-7">
-            <div className="mb-2 h-1 w-12 rounded-full bg-amber-400" />
-            <h2 className="text-2xl font-black sm:text-3xl">
-              أخبار مناطق نيويورك
-            </h2>
-            <p className="mt-2 text-sm text-zinc-500">
-              اكتشف أخبار المناطق الخمس في مدينة نيويورك.
-            </p>
-          </div>
+        {/* Sections - published articles only */}
+        {sections.map((section) => {
+          const sectionArticles = articles
+            .filter((article) =>
+              section.categories.includes(article.category)
+            )
+            .slice(0, 3);
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {boroughs.map((borough) => (
-              <div
-                key={borough.english}
-                className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
-              >
-                <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-xl text-amber-700">
-                  ◈
-                </div>
-                <h3 className="text-lg font-black">
-                  {borough.name}
-                </h3>
-                <p className="mt-1 text-sm text-zinc-500" dir="ltr">
-                  {borough.english}
+          return (
+            <section
+              id={section.id}
+              key={section.id}
+              className="scroll-mt-8 py-10"
+            >
+              <div className="mb-6 border-b border-slate-200 pb-5">
+                <div className="mb-3 h-1 w-12 rounded-full bg-amber-400" />
+                <h2 className="text-2xl font-black sm:text-3xl">
+                  {section.title}
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  {section.description}
                 </p>
               </div>
-            ))}
+
+              {sectionArticles.length ? (
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {sectionArticles.map((article) => (
+                    <ArticleCard
+                      key={article.id}
+                      article={article}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-9 text-center text-sm text-slate-500">
+                  لا توجد أخبار منشورة في هذا القسم حاليًا.
+                </div>
+              )}
+            </section>
+          );
+        })}
+
+        {/* Latest */}
+        <section id="latest" className="scroll-mt-8 py-10">
+          <div className="mb-6 border-b border-slate-200 pb-5">
+            <div className="mb-3 h-1 w-12 rounded-full bg-amber-400" />
+            <h2 className="text-2xl font-black sm:text-3xl">
+              آخر أخبار نيويورك
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              أحدث الأخبار المنشورة من مختلف الأقسام.
+            </p>
           </div>
+
+          {latestArticles.length ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {latestArticles.map((article) => (
+                <ArticleCard key={article.id} article={article} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-9 text-center text-sm text-slate-500">
+              لا توجد أخبار إضافية منشورة حاليًا.
+            </div>
+          )}
         </section>
 
-        {/* Topic sections */}
-        <section className="grid gap-6 py-8 md:grid-cols-2">
-          <div
-            id="economy"
-            className="scroll-mt-8 rounded-3xl border border-zinc-200 bg-white p-8"
-          >
-            <span className="text-sm font-bold text-amber-700">
-              اقتصاد وأعمال
-            </span>
-            <h2 className="mt-3 text-2xl font-black">
-              الاقتصاد والوظائف
-            </h2>
-            <p className="mt-4 text-sm leading-8 text-zinc-600">
-              أخبار سوق العمل والأعمال والعقارات والتطورات
-              الاقتصادية التي تؤثر على سكان نيويورك.
-            </p>
-          </div>
-
-          <div
-            id="community"
-            className="scroll-mt-8 rounded-3xl border border-zinc-200 bg-white p-8"
-          >
-            <span className="text-sm font-bold text-amber-700">
-              مجتمعنا
-            </span>
-            <h2 className="mt-3 text-2xl font-black">
-              المجتمع العربي
-            </h2>
-            <p className="mt-4 text-sm leading-8 text-zinc-600">
-              أخبار الجالية العربية والفعاليات المحلية والمبادرات
-              والخدمات التي تهم المجتمع العربي في نيويورك.
-            </p>
-          </div>
+        {/* Editorial note */}
+        <section className="rounded-2xl bg-amber-50 p-6 text-sm leading-8 text-amber-950">
+          <h2 className="font-black">عن نيويورك بالعربي</h2>
+          <p className="mt-2">
+            منصة إخبارية عربية تهتم بأخبار الهجرة والمساعدات
+            والجالية العربية والمسلمة والخدمات التي تهم سكان
+            نيويورك. نعمل على تقديم المعلومات باللغة العربية،
+            مع الإشارة إلى المصادر الأصلية للأخبار.
+          </p>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-zinc-950 text-white">
-        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-5 px-5 py-9 sm:px-8 md:flex-row md:items-center">
+      <footer className="bg-slate-950 text-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-9 sm:px-8">
           <div>
-            <p className="text-lg font-black">
-              نيويورك <span className="text-amber-400">بالعربي</span>
+            <p className="text-xl font-black">
+              نيويورك{" "}
+              <span className="text-amber-400">بالعربي</span>
             </p>
-            <p className="mt-2 text-sm text-zinc-400">
-              أخبار مدينتنا... بلغتنا
+            <p className="mt-2 text-sm text-slate-400">
+              أخبار مدينتك، خدمات تهمك، وقصص من جاليتنا
             </p>
           </div>
-
-          <p className="text-xs text-zinc-400">
-            © 2026 نيويورك بالعربي.
-            جميع الحقوق محفوظة.
+          <p className="text-xs text-slate-400">
+            © 2026 نيويورك بالعربي. جميع الحقوق محفوظة.
           </p>
         </div>
       </footer>

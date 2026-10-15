@@ -5,7 +5,7 @@ import { auth } from "../../auth";
 import { prisma } from "../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
+import { translateNewsToArabic } from "../../lib/translate-news";
 async function requireAdmin() {
   const session = await auth();
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
@@ -118,4 +118,45 @@ export async function updateArticle(formData: FormData) {
   revalidatePath("/");
 
   redirect("/admin");
+}
+
+
+export async function translateArticle(articleId: number) {
+  // السماح للمدير فقط
+  await requireAdmin();
+
+  if (!Number.isSafeInteger(articleId) || articleId <= 0) {
+    throw new Error("Invalid article ID.");
+  }
+
+  // قراءة الخبر من قاعدة البيانات
+  const article = await prisma.article.findUnique({
+    where: { id: articleId },
+    select: {
+      id: true,
+      title: true,
+      summary: true,
+      content: true,
+      status: true,
+    },
+  });
+
+  if (!article) {
+    throw new Error("Article not found.");
+  }
+
+  // لا نسمح بترجمة الأخبار المنشورة بهذه الوظيفة
+  if (article.status !== "DRAFT") {
+    throw new Error("Only draft articles can be translated.");
+  }
+
+  // إرسال المعلومات المتاحة إلى OpenAI
+  const translation = await translateNewsToArabic(
+    article.title,
+    article.summary,
+    article.content
+  );
+
+  // إرجاع الترجمة للمراجعة فقط، بدون حفظها
+  return translation;
 }

@@ -1,6 +1,13 @@
 
+"use client";
+
 import Link from "next/link";
-import { createArticle, updateArticle } from "./editor-actions";
+import { useState, useTransition } from "react";
+import {
+  createArticle,
+  updateArticle,
+  translateArticle,
+} from "./editor-actions";
 
 type ArticleData = {
   id: number;
@@ -19,6 +26,47 @@ export default function ArticleForm({
   article?: ArticleData;
 }) {
   const isEditing = Boolean(article);
+
+  const [title, setTitle] = useState(article?.title ?? "");
+  const [summary, setSummary] = useState(article?.summary ?? "");
+  const [content, setContent] = useState(article?.content ?? "");
+
+  const [isTranslating, startTranslation] = useTransition();
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  function handleTranslate() {
+    if (!article || isTranslating) return;
+
+    const confirmed = window.confirm(
+      "سيتم استبدال العنوان والملخص والمحتوى الموجودين في الحقول بمسودة عربية. هل تريدين المتابعة؟"
+    );
+
+    if (!confirmed) return;
+
+    setMessage("");
+    setError("");
+
+    startTranslation(async () => {
+      try {
+        const result = await translateArticle(article.id);
+
+        setTitle(result.title);
+        setSummary(result.summary);
+        setContent(result.content);
+
+        setMessage(
+          "تم إعداد المسودة العربية. راجعي المعلومات قبل الحفظ."
+        );
+      } catch (err) {
+        console.error("Translation failed:", err);
+
+        setError(
+          "فشلت الترجمة. راجعي سجل Terminal لمعرفة السبب."
+        );
+      }
+    });
+  }
 
   return (
     <main
@@ -43,6 +91,42 @@ export default function ArticleForm({
             : "أدخلي معلومات الخبر. سيتم حفظه كمسودة."}
         </p>
 
+        {article && (
+          <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <h2 className="text-lg font-bold">
+              إعداد مسودة عربية بالذكاء الاصطناعي
+            </h2>
+
+            <p className="mt-2 text-sm text-zinc-600">
+              سيُنشئ الذكاء الاصطناعي مسودة عربية من معلومات
+              الخبر المتاحة. يجب مراجعتها قبل الحفظ والنشر.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleTranslate}
+              disabled={isTranslating}
+              className="mt-4 rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
+            >
+              {isTranslating
+                ? "جارٍ إعداد الترجمة..."
+                : "ترجمة الخبر بالذكاء الاصطناعي"}
+            </button>
+
+            {message && (
+              <p role="status" className="mt-3 text-sm text-green-800">
+                {message}
+              </p>
+            )}
+
+            {error && (
+              <p role="alert" className="mt-3 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+          </section>
+        )}
+
         <form
           action={isEditing ? updateArticle : createArticle}
           className="mt-8 space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
@@ -57,7 +141,9 @@ export default function ArticleForm({
               type="text"
               required
               maxLength={180}
-              defaultValue={article?.title ?? ""}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              dir="auto"
               className="input-style"
               placeholder="اكتبي عنوانًا واضحًا للخبر"
             />
@@ -69,7 +155,9 @@ export default function ArticleForm({
               required
               maxLength={500}
               rows={3}
-              defaultValue={article?.summary ?? ""}
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              dir="auto"
               className="input-style"
               placeholder="ملخص قصير يشرح أهم المعلومات"
             />
@@ -81,7 +169,9 @@ export default function ArticleForm({
               required
               maxLength={20000}
               rows={12}
-              defaultValue={article?.content ?? ""}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              dir="auto"
               className="input-style"
               placeholder="اكتبي تفاصيل الخبر هنا..."
             />
@@ -96,12 +186,18 @@ export default function ArticleForm({
                 className="input-style"
               >
                 <option value="عام">عام</option>
+                <option value="الهجرة والإقامة">الهجرة والإقامة</option>
+<option value="المساعدات الحكومية">المساعدات الحكومية</option>
                 <option value="أخبار محلية">أخبار محلية</option>
+                <option value="سكن واقتصاد">سكن واقتصاد</option>
                 <option value="تعليم">تعليم</option>
                 <option value="اقتصاد">اقتصاد</option>
                 <option value="صحة">صحة</option>
                 <option value="مجتمع">مجتمع</option>
                 <option value="مواصلات">مواصلات</option>
+                <option value="الجالية العربية والمسلمة">
+                  الجالية العربية والمسلمة
+                </option>
               </select>
             </Field>
 
@@ -129,9 +225,9 @@ export default function ArticleForm({
               required
               maxLength={2000}
               defaultValue={article?.sourceUrl ?? ""}
+              dir="ltr"
               className="input-style"
               placeholder="https://example.com/news"
-              dir="ltr"
             />
           </Field>
 
@@ -141,16 +237,17 @@ export default function ArticleForm({
               type="url"
               maxLength={2000}
               defaultValue={article?.imageUrl ?? ""}
+              dir="ltr"
               className="input-style"
               placeholder="https://example.com/image.jpg"
-              dir="ltr"
             />
           </Field>
 
           <div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-6">
             <button
               type="submit"
-              className="rounded-xl bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-zinc-700"
+              disabled={isTranslating}
+              className="rounded-xl bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {isEditing ? "حفظ التعديلات" : "حفظ كمسودة"}
             </button>

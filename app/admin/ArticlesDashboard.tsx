@@ -3,10 +3,12 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+
 import {
   publishArticle,
   unpublishArticle,
   deleteArticle,
+  importNewsFromRSS,
 } from "./actions";
 
 type Article = {
@@ -31,7 +33,30 @@ export default function ArticlesDashboard({
   const [isPending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
+const [importMessage, setImportMessage] = useState("");
+const [isImporting, setIsImporting] = useState(false);
+const [selectedSource, setSelectedSource] = useState("gothamist");
 
+function handleImportRSS() {
+  if (isPending || isImporting) return;
+
+  setError("");
+  setImportMessage("");
+  setIsImporting(true);
+
+  startTransition(async () => {
+    try {
+const result = await importNewsFromRSS(selectedSource);
+      setImportMessage(
+        `تم استيراد ${result.imported} خبر جديد، وتجاوز ${result.skipped} خبر مكرر أو غير صالح.`
+      );
+    } catch {
+      setError("فشل جلب الأخبار من RSS. حاولي مرة أخرى.");
+    } finally {
+      setIsImporting(false);
+    }
+  });
+}
   const published = articles.filter(
     (a) => a.status === "PUBLISHED"
   ).length;
@@ -112,6 +137,26 @@ export default function ArticlesDashboard({
             </p>
           </div>
 
+<select
+  value={selectedSource}
+  onChange={(e) => setSelectedSource(e.target.value)}
+  disabled={isPending || isImporting}
+  aria-label="اختيار مصدر الأخبار"
+  className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900"
+>
+  <option value="gothamist">Gothamist</option>
+  <option value="the-city">THE CITY</option>
+  <option value="amny">amNewYork</option>
+</select>
+
+          <button
+  type="button"
+  onClick={handleImportRSS}
+  disabled={isPending || isImporting}
+  className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
+>
+  {isImporting ? "جارٍ جلب الأخبار..." : "جلب الأخبار من RSS"}
+</button>
           <Link
             href="/admin/new"
             className="rounded-xl bg-zinc-900 px-5 py-3 font-semibold text-white hover:bg-zinc-700"
@@ -159,7 +204,14 @@ export default function ArticlesDashboard({
               </button>
             ))}
           </div>
-
+{importMessage && (
+  <p
+    role="status"
+    className="mb-4 rounded-lg bg-green-50 p-4 text-sm text-green-800"
+  >
+    {importMessage}
+  </p>
+)}
           {error && (
             <p
               role="alert"

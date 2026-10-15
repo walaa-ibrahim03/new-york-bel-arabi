@@ -3,7 +3,7 @@ import { auth } from "../../../../auth";
 import { prisma } from "../../../../lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import ArticleForm from "../../ArticleForm";
-
+import { connection } from "next/server";
 export const instant = false;
 
 export default async function EditArticlePage({
@@ -11,6 +11,8 @@ export default async function EditArticlePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+    await connection();
+
   const session = await auth();
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 

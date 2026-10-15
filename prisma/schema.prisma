@@ -18,7 +18,7 @@ model Article {
   id          Int      @id @default(autoincrement())
   title       String
   content     String
-  sourceUrl   String
+  sourceUrl String @unique
   imageUrl    String?
   status      String   @default("DRAFT")
   createdAt   DateTime @default(now())
