@@ -1,5 +1,6 @@
 
 import Link from "next/link";
+import { connection } from "next/server";
 import { normalizeCategory } from "../lib/categories";
 import { prisma } from "../lib/prisma";
 
@@ -103,6 +104,7 @@ function ArticleCard({ article }: { article: NewsItem }) {
 }
 
 export default async function Home() {
+  await connection();
   const articles: NewsItem[] = await prisma.article.findMany({
     where: {
       status: "PUBLISHED",

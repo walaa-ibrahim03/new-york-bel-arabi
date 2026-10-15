@@ -18,6 +18,7 @@ async function main() {
   }
   process.env.DATABASE_URL = 'disabled-do-not-use';
   process.env.ADMIN_EMAIL = 'cycle-test@example.org';
+  process.env.NYBA_NEWS_MODE = 'read-write';
   const { PrismaClient } = require('../app/generated/prisma');
   const client = new PrismaClient({ datasources:{db:{url:target.url}}, log:[] });
   const runId = crypto.randomUUID();

@@ -1,3 +1,4 @@
+import { assertNewsOperationAllowed } from "./database-guard";
 
 import "server-only";
 import OpenAI from "openai";
@@ -13,6 +14,7 @@ export async function translateNewsToArabic(
   summary: string,
   content: string
 ): Promise<NewsTranslation> {
+  assertNewsOperationAllowed();
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is missing");
   }

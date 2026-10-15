@@ -4,7 +4,7 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const mode = process.argv[2] ?? 'test';
 const commands = {
-  test: ['--test', 'tests/phase-one.cjs', 'tests/preparation.cjs'],
+  test: ['--test', 'tests/phase-one.cjs', 'tests/preparation.cjs', 'tests/database-guard.cjs'],
   typecheck: ['node_modules/typescript/bin/tsc', '--noEmit'],
 };
 if (!Object.hasOwn(commands, mode)) {
@@ -18,6 +18,7 @@ for (const key of ['PATH', 'HOME', 'TMPDIR', 'TEMP', 'TMP', 'SystemRoot']) {
 }
 env.DATABASE_URL = 'offline-check-disabled';
 env.NODE_ENV = 'test';
+env.NYBA_NEWS_MODE = 'read-write';
 env.NODE_OPTIONS = `--require=${JSON.stringify(path.join(__dirname, 'offline-network-guard.cjs'))}`;
 const result = spawnSync(process.execPath, commands[mode], { cwd: root, env, stdio: 'inherit' });
 if (result.error) console.error('Offline check could not start.');

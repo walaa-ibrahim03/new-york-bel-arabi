@@ -19,6 +19,7 @@ function previewEnvironment(config, target, inherited) {
   return {
     ...env, NODE_ENV:'development', NEXT_TELEMETRY_DISABLED:'1',
     NYBA_TEST_DATABASE_URL:target.url, NYBA_TEST_DATABASE_HOST:target.host,
+    NYBA_DATABASE_PROFILE:'isolated-test', NYBA_TEST_PROJECT_CONFIRMED:'true', NYBA_NEWS_MODE:'read-write',
     DATABASE_URL:target.url,
     AUTH_URL:'http://localhost:3100', AUTH_TRUST_HOST:'true',
     AUTH_SECRET:config.TEST_AUTH_SECRET, AUTH_GOOGLE_ID:config.TEST_AUTH_GOOGLE_ID,
@@ -57,16 +58,8 @@ async function prepareSnapshot() {
     const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
     fs.writeFileSync(path.join(dir,'package.json'),JSON.stringify({name:'nyba-isolated-test-preview',private:true,dependencies:pkg.dependencies,devDependencies:pkg.devDependencies}));
     fs.symlinkSync(path.join(root,'node_modules'),path.join(dir,'node_modules'),'dir');
-    // Explicit datasource: no default production DATABASE_URL is ever consulted.
-    fs.writeFileSync(path.join(dir,'lib/prisma.ts'),`import { PrismaClient } from "../app/generated/prisma";
-const value = process.env.NYBA_TEST_DATABASE_URL;
-if (!value) throw new Error("Test datasource missing");
-const url = new URL(value);
-if (url.pathname !== "/nyba_test" || url.hostname !== process.env.NYBA_TEST_DATABASE_HOST || url.searchParams.get("sslmode") !== "require") throw new Error("Test datasource mismatch");
-const shared = globalThis as unknown as { testPrisma?: PrismaClient };
-export const prisma = shared.testPrisma ?? new PrismaClient({datasources:{db:{url:value}},log:[]});
-shared.testPrisma = prisma;
-`);
+    // Keep the actual guard and Prisma wrapper; the isolated test profile is
+    // enabled only by this launcher and is rejected on Vercel/production.
     const fixture=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/phase-one.json'),'utf8'));
     // Replace the provider entirely in the disposable snapshot, never in production sources.
     fs.writeFileSync(path.join(dir,'lib/translate-news.ts'),`import "server-only";

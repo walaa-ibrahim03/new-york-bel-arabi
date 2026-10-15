@@ -2,6 +2,7 @@
 "use server";
 
 import { canPublish, validateArticleId, validateEditorialArticle } from "../../lib/article-policy";
+import { assertNewsOperationAllowed } from "../../lib/database-guard";
 import { auth } from "../../auth";
 import { prisma } from "../../lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -9,6 +10,7 @@ import { importRSS } from "../../lib/import-rss";
 import { newsSources } from "../../lib/news-sources";
 
 async function requireAdmin() {
+  assertNewsOperationAllowed();
   const session = await auth();
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 

@@ -3,12 +3,14 @@
 
 import { normalizeCategory, isKnownCategory } from "../../lib/categories";
 import { validateWebUrl } from "../../lib/article-policy";
+import { assertNewsOperationAllowed } from "../../lib/database-guard";
 import { auth } from "../../auth";
 import { prisma } from "../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { translateNewsToArabic } from "../../lib/translate-news";
 async function requireAdmin() {
+  assertNewsOperationAllowed();
   const session = await auth();
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 

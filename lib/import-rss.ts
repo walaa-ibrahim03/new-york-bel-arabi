@@ -1,3 +1,4 @@
+import { assertNewsOperationAllowed } from "./database-guard";
 
 import { normalizeCategory } from "./categories";
 import { validateWebUrl } from "./article-policy";
@@ -112,6 +113,7 @@ export async function importRSS({
   sourceName = "مصدر غير معروف",
   limit = 5,
 }: ImportRSSOptions) {
+  assertNewsOperationAllowed();
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 40) throw new Error("Invalid import limit");
   const articles = await fetchRSS(feedUrl);
 
