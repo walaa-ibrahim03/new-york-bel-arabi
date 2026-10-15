@@ -1,6 +1,7 @@
 
 "use client";
 
+import { categories, normalizeCategory } from "../../lib/categories";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
@@ -11,6 +12,10 @@ import {
 
 type ArticleData = {
   id: number;
+  revision: number;
+  originalTitle: string | null;
+  originalSummary: string | null;
+  originalContent: string | null;
   title: string;
   summary: string;
   content: string;
@@ -59,10 +64,10 @@ export default function ArticleForm({
           "تم إعداد المسودة العربية. راجعي المعلومات قبل الحفظ."
         );
       } catch (err) {
-        console.error("Translation failed:", err);
+        void err;
 
         setError(
-          "فشلت الترجمة. راجعي سجل Terminal لمعرفة السبب."
+          "تعذّر إعداد الترجمة. تأكدي من وجود الأصل وأن الخبر مسودة."
         );
       }
     });
@@ -105,7 +110,7 @@ export default function ArticleForm({
             <button
               type="button"
               onClick={handleTranslate}
-              disabled={isTranslating}
+              disabled={isTranslating || !article.originalTitle}
               className="mt-4 rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
             >
               {isTranslating
@@ -131,9 +136,17 @@ export default function ArticleForm({
           action={isEditing ? updateArticle : createArticle}
           className="mt-8 space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
         >
-          {article && (
+          {article && <>
             <input type="hidden" name="id" value={article.id} />
-          )}
+            <input type="hidden" name="revision" value={article.revision} />
+            <section className="rounded-xl bg-zinc-50 p-4">
+              <h2 className="font-bold">النص الأصلي المحفوظ</h2>
+              {article.originalTitle ? <div dir="auto" className="whitespace-pre-wrap">
+                <h3>{article.originalTitle}</h3><p>{article.originalSummary}</p><p>{article.originalContent}</p>
+              </div> : <p>لا يوجد أصل محفوظ لهذا الخبر القديم؛ راجعي رابط المصدر. لن نعتبر النص الحالي أصلًا إنجليزيًا.</p>}
+              <p>حفظ التعديلات يعيد الخبر إلى المسودة ويلغي الاعتماد السابق.</p>
+            </section>
+          </>}
 
           <Field label="عنوان الخبر">
             <input
@@ -182,22 +195,12 @@ export default function ArticleForm({
               <select
                 name="category"
                 required
-                defaultValue={article?.category ?? "عام"}
+                defaultValue={normalizeCategory(article?.category ?? "عام")}
                 className="input-style"
               >
-                <option value="عام">عام</option>
-                <option value="الهجرة والإقامة">الهجرة والإقامة</option>
-<option value="المساعدات الحكومية">المساعدات الحكومية</option>
-                <option value="أخبار محلية">أخبار محلية</option>
-                <option value="سكن واقتصاد">سكن واقتصاد</option>
-                <option value="تعليم">تعليم</option>
-                <option value="اقتصاد">اقتصاد</option>
-                <option value="صحة">صحة</option>
-                <option value="مجتمع">مجتمع</option>
-                <option value="مواصلات">مواصلات</option>
-                <option value="الجالية العربية والمسلمة">
-                  الجالية العربية والمسلمة
-                </option>
+                {[...new Set([...categories, ...(article ? [normalizeCategory(article.category)] : [])])].map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
               </select>
             </Field>
 

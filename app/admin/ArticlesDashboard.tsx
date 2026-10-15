@@ -1,10 +1,15 @@
 
 "use client";
 
+import { statusLabels } from "../../lib/article-policy";
+import { newsSources } from "../../lib/news-sources";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
 import {
+  submitArticleForReview,
+  approveArticle,
+  returnArticleToDraft,
   publishArticle,
   unpublishArticle,
   deleteArticle,
@@ -21,7 +26,7 @@ type Article = {
   createdAt: string;
 };
 
-type Filter = "ALL" | "DRAFT" | "PUBLISHED";
+type Filter = "ALL" | "DRAFT" | "IN_REVIEW" | "APPROVED" | "PUBLISHED";
 
 export default function ArticlesDashboard({
   articles,
@@ -115,6 +120,8 @@ const result = await importNewsFromRSS(selectedSource);
   const filters: { label: string; value: Filter }[] = [
     { label: "جميع الأخبار", value: "ALL" },
     { label: "المسودات", value: "DRAFT" },
+    { label: "قيد المراجعة", value: "IN_REVIEW" },
+    { label: "المعتمدة", value: "APPROVED" },
     { label: "المنشورة", value: "PUBLISHED" },
   ];
 
@@ -144,9 +151,7 @@ const result = await importNewsFromRSS(selectedSource);
   aria-label="اختيار مصدر الأخبار"
   className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900"
 >
-  <option value="gothamist">Gothamist</option>
-  <option value="the-city">THE CITY</option>
-  <option value="amny">amNewYork</option>
+  {newsSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
 </select>
 
           <button
@@ -244,11 +249,7 @@ const result = await importNewsFromRSS(selectedSource);
                           : "bg-amber-50 text-amber-700"
                       }`}
                     >
-                      {article.status === "PUBLISHED"
-                        ? "منشور"
-                        : article.status === "DRAFT"
-                          ? "مسودة"
-                          : article.status}
+                      {statusLabels[article.status] ?? article.status}
                     </span>
 
                     <span className="text-xs text-zinc-500">
@@ -289,7 +290,10 @@ const result = await importNewsFromRSS(selectedSource);
                       تعديل الخبر
                     </Link>
 
-                    {article.status === "DRAFT" && (
+                    {article.status === "DRAFT" && <button type="button" disabled={isPending} onClick={() => runAction(article.id, submitArticleForReview)} className="rounded-lg border px-4 py-2">إرسال للمراجعة</button>}
+                    {article.status === "IN_REVIEW" && <button type="button" disabled={isPending} onClick={() => runAction(article.id, approveArticle)} className="rounded-lg border px-4 py-2">اعتماد الخبر بعد المراجعة</button>}
+                    {["IN_REVIEW", "APPROVED"].includes(article.status) && <button type="button" disabled={isPending} onClick={() => runAction(article.id, returnArticleToDraft)} className="rounded-lg border px-4 py-2">إعادة إلى المسودة</button>}
+                    {article.status === "APPROVED" && (
                       <button
                         type="button"
                         disabled={isPending}

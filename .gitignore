@@ -43,3 +43,6 @@ next-env.d.ts
 /app/generated/prisma
 # Security audit reports
 audit-report.json
+# Generated local integration-run output
+/docs/news-cycle-result.json
+/nyba-browser-test-*/

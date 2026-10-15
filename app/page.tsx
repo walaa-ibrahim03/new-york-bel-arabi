@@ -1,5 +1,6 @@
 
 import Link from "next/link";
+import { normalizeCategory } from "../lib/categories";
 import { prisma } from "../lib/prisma";
 
 export const instant = false;
@@ -16,7 +17,7 @@ const sections = [
     id: "benefits",
     title: "المساعدات الحكومية",
     description: "SNAP، Medicaid، دعم السكن والمساعدات المالية",
-    categories: ["المساعدات", "المساعدات الحكومية", "السكن"],
+    categories: ["المساعدات الحكومية", "السكن", "سكن واقتصاد"],
     symbol: "✦",
   },
   {
@@ -127,7 +128,7 @@ export default async function Home() {
 
   const featured =
     articles.find((article) =>
-      priorityCategories.includes(article.category)
+      priorityCategories.includes(normalizeCategory(article.category))
     ) ?? articles[0];
 
   const latestArticles = articles
@@ -309,7 +310,7 @@ export default async function Home() {
         {sections.map((section) => {
           const sectionArticles = articles
             .filter((article) =>
-              section.categories.includes(article.category)
+              section.categories.includes(normalizeCategory(article.category))
             )
             .slice(0, 3);
 

@@ -4,9 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && next build --webpack",
+    "build:check": "node scripts/check-production-build.cjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:phase-one": "node scripts/check-offline.cjs test",
+    "typecheck:offline": "node scripts/check-offline.cjs typecheck",
+    "check:test-env": "node scripts/check-test-env.cjs",
+    "preview:test:check": "node scripts/preview-test-site.cjs --check",
+    "preview:test": "node scripts/preview-test-site.cjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
@@ -18,6 +24,7 @@
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

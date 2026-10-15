@@ -1,6 +1,8 @@
 
 "use server";
 
+import { normalizeCategory, isKnownCategory } from "../../lib/categories";
+import { validateWebUrl } from "../../lib/article-policy";
 import { auth } from "../../auth";
 import { prisma } from "../../lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -46,22 +48,15 @@ function readText(
 function validateUrl(value: string, field: string) {
   if (!value) return;
 
-  try {
-    const url = new URL(value);
-
-    if (!["https:", "http:"].includes(url.protocol)) {
-      throw new Error("Invalid protocol");
-    }
-  } catch {
-    throw new Error(`${field} must be a valid web URL.`);
-  }
+  try { validateWebUrl(value); } catch { throw new Error(`${field} must be a valid public web URL.`); }
 }
 
 function readArticle(formData: FormData) {
   const title = readText(formData, "title", 180);
   const summary = readText(formData, "summary", 500);
   const content = readText(formData, "content", 20000);
-  const category = readText(formData, "category", 70);
+  const rawCategory = readText(formData, "category", 70);
+  const category = normalizeCategory(rawCategory);
   const borough = readText(formData, "borough", 70);
   const sourceUrl = readText(formData, "sourceUrl", 2000);
   const imageUrl = readText(formData, "imageUrl", 2000, false);
@@ -84,6 +79,7 @@ export async function createArticle(formData: FormData) {
   await requireAdmin();
 
   const data = readArticle(formData);
+  if (!isKnownCategory(data.category)) throw new Error("Invalid category");
 
   await prisma.article.create({
     data: {
@@ -109,10 +105,27 @@ export async function updateArticle(formData: FormData) {
 
   const data = readArticle(formData);
 
-  await prisma.article.update({
-    where: { id },
-    data,
+  const revisionValue = formData.get("revision");
+  if (typeof revisionValue !== "string" || !revisionValue.trim()) throw new Error("Missing revision");
+  const revision = Number(revisionValue);
+  if (!Number.isSafeInteger(revision) || revision < 0) throw new Error("Invalid revision");
+  const existing = await prisma.article.findUnique({ where: { id } });
+  if (!existing) throw new Error("Article not found");
+  if (existing.originalTitle && data.sourceUrl !== existing.sourceUrl) throw new Error("لا يمكن تغيير رابط المصدر المرتبط بالأصل المحفوظ. أنشئي مسودة مستقلة للمصدر الجديد.");
+  if (!isKnownCategory(data.category) && data.category !== normalizeCategory(existing.category)) throw new Error("Invalid category");
+  const result = await prisma.article.updateMany({
+    where: { id, revision },
+    data: {
+      ...data,
+      status: "DRAFT", publishedAt: null,
+      reviewedAt: null, reviewedBy: null, approvedAt: null, approvedBy: null,
+      revision: { increment: 1 },
+    },
   });
+  if (result.count !== 1) throw new Error("تغيّر الخبر. أعيدي تحميل الصفحة قبل الحفظ.");
+  revalidatePath(`/news/${id}`);
+  revalidatePath(`/admin/edit/${id}`);
+  revalidatePath("/sitemap.xml");
 
   revalidatePath("/admin");
   revalidatePath("/");
@@ -138,6 +151,9 @@ export async function translateArticle(articleId: number) {
       summary: true,
       content: true,
       status: true,
+      originalTitle: true,
+      originalSummary: true,
+      originalContent: true,
     },
   });
 
@@ -150,11 +166,13 @@ export async function translateArticle(articleId: number) {
     throw new Error("Only draft articles can be translated.");
   }
 
-  // إرسال المعلومات المتاحة إلى OpenAI
+  if (!article.originalTitle) throw new Error("لا يتوفر أصل محفوظ لهذا الخبر القديم. راجعي المصدر يدويًا.");
+
+  // إرسال الأصل المحفوظ فقط إلى OpenAI
   const translation = await translateNewsToArabic(
-    article.title,
-    article.summary,
-    article.content
+    article.originalTitle,
+    article.originalSummary ?? "",
+    article.originalContent ?? ""
   );
 
   // إرجاع الترجمة للمراجعة فقط، بدون حفظها

@@ -1,9 +1,11 @@
+import { categories } from "./categories";
+
 
 export type NewsSource = {
   id: string;
   name: string;
   feedUrl: string;
-  category: string;
+  category: (typeof categories)[number];
 };
 
 export const newsSources: NewsSource[] = [

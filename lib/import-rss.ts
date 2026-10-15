@@ -1,4 +1,6 @@
 
+import { normalizeCategory } from "./categories";
+import { validateWebUrl } from "./article-policy";
 import { prisma } from "./prisma";
 import { fetchRSS } from "./rss";
 
@@ -110,6 +112,7 @@ export async function importRSS({
   sourceName = "مصدر غير معروف",
   limit = 5,
 }: ImportRSSOptions) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 40) throw new Error("Invalid import limit");
   const articles = await fetchRSS(feedUrl);
 
   let imported = 0;
@@ -127,6 +130,15 @@ export async function importRSS({
       continue;
     }
 
+    let sourceUrl: string;
+    try {
+      sourceUrl = validateWebUrl(article.link);
+      if (article.title.length > 180 || article.summary.length > 20000 ||
+          (article.publishedAt && !Number.isFinite(Date.parse(article.publishedAt)))) throw new Error("Invalid RSS item");
+    } catch {
+      skipped++;
+      continue;
+    }
     const detectedCategory = detectCategory(
       article.title,
       article.summary
@@ -142,10 +154,13 @@ export async function importRSS({
         data: {
           title: article.title,
           content: article.summary || article.title,
-          summary: article.summary,
-          sourceUrl: article.link,
+          summary: article.summary.slice(0, 500),
+          originalTitle: article.title,
+          originalSummary: article.summary,
+          originalContent: article.summary || article.title,
+          sourceUrl,
           status: "DRAFT",
-          category: detectedCategory,
+          category: normalizeCategory(detectedCategory),
           borough: "نيويورك",
         },
       });
