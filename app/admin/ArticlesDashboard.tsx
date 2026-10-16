@@ -30,14 +30,18 @@ type Filter = "ALL" | "DRAFT" | "IN_REVIEW" | "APPROVED" | "PUBLISHED";
 
 export default function ArticlesDashboard({
   articles,
+  readOnly = true,
 }: {
   articles: Article[];
+  readOnly?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
   const [isPending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [deletedIds, setDeletedIds] = useState<number[]>([]);
+  const [deleteFeedback, setDeleteFeedback] = useState<{ id: number; ok: boolean; message: string } | null>(null);
 const [importMessage, setImportMessage] = useState("");
 const [isImporting, setIsImporting] = useState(false);
 const [selectedSource, setSelectedSource] = useState("gothamist");
@@ -62,16 +66,17 @@ const result = await importNewsFromRSS(selectedSource);
     }
   });
 }
-  const published = articles.filter(
+  const visibleArticles = useMemo(() => articles.filter(article => !deletedIds.includes(article.id)), [articles, deletedIds]);
+  const published = visibleArticles.filter(
     (a) => a.status === "PUBLISHED"
   ).length;
 
-  const drafts = articles.filter(
+  const drafts = visibleArticles.filter(
     (a) => a.status === "DRAFT"
   ).length;
 
   const filteredArticles = useMemo(() => {
-    return articles.filter((article) => {
+    return visibleArticles.filter((article) => {
       const matchesSearch = article.title
         .toLowerCase()
         .includes(search.trim().toLowerCase());
@@ -81,7 +86,7 @@ const result = await importNewsFromRSS(selectedSource);
 
       return matchesSearch && matchesStatus;
     });
-  }, [articles, search, filter]);
+  }, [visibleArticles, search, filter]);
 
   function runAction(
     id: number,
@@ -104,7 +109,7 @@ const result = await importNewsFromRSS(selectedSource);
   }
 
   function handleDelete(id: number, title: string) {
-    if (isPending) return;
+    if (isPending || readOnly) return;
 
     if (
       !window.confirm(
@@ -114,7 +119,18 @@ const result = await importNewsFromRSS(selectedSource);
       return;
     }
 
-    runAction(id, deleteArticle);
+    setError("");
+    setDeleteFeedback(null);
+    setBusyId(id);
+    startTransition(async () => {
+      try {
+        const result = await deleteArticle(id);
+        setDeleteFeedback({ id, ok: result.ok, message: result.message });
+        if (result.ok) setDeletedIds(previous => [...previous, id]);
+      } catch {
+        setDeleteFeedback({ id, ok: false, message: "تعذّر إكمال طلب الحذف. أعيدي تحميل الصفحة للتحقق من حالة الخبر قبل المحاولة مجددًا." });
+      } finally { setBusyId(null); }
+    });
   }
 
   const filters: { label: string; value: Filter }[] = [
@@ -131,6 +147,7 @@ const result = await importNewsFromRSS(selectedSource);
       className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900 sm:px-8"
     >
       <div className="mx-auto max-w-6xl">
+        {readOnly && <p role="status" className="mb-5 rounded-lg bg-amber-50 p-4 text-amber-900">هذه النسخة تعمل بوضع القراءة فقط؛ الحذف والتحرير والاستيراد متوقفة مؤقتًا لحماية البيانات.</p>}
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="mb-2 text-sm font-semibold text-amber-600">
@@ -171,7 +188,7 @@ const result = await importNewsFromRSS(selectedSource);
         </header>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
-          <StatCard label="إجمالي الأخبار" value={articles.length} />
+          <StatCard label="إجمالي الأخبار" value={visibleArticles.length} />
           <StatCard label="المنشورة" value={published} />
           <StatCard label="المسودات" value={drafts} />
         </section>
@@ -225,6 +242,7 @@ const result = await importNewsFromRSS(selectedSource);
               {error}
             </p>
           )}
+          {deleteFeedback?.ok && <p role="status" className="mb-4 rounded-lg bg-green-50 p-4 text-green-800">{deleteFeedback.message}</p>}
 
           <p className="mb-4 text-sm text-zinc-500">
             عدد النتائج: {filteredArticles.length}
@@ -325,15 +343,16 @@ const result = await importNewsFromRSS(selectedSource);
 
                     <button
                       type="button"
-                      disabled={isPending}
+                      disabled={isPending || readOnly}
                       onClick={() =>
                         handleDelete(article.id, article.title)
                       }
                       className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
                     >
-                      حذف نهائي
+                      {isPending && busyId === article.id ? "جارٍ الحذف..." : "حذف نهائي"}
                     </button>
                   </div>
+                  {deleteFeedback?.id === article.id && !deleteFeedback.ok && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-red-700">{deleteFeedback.message}</p>}
                 </article>
               ))}
             </div>

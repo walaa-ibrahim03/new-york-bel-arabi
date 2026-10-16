@@ -87,7 +87,10 @@ test('staging blocks every news action and RSS/OpenAI before resources are touch
   'rss-parser':{__esModule:true,default:class{parseURL(){unexpected();}}},
  };
  const actions=load('app/admin/actions.ts',mocks);
- for(const action of Object.values(actions))await assert.rejects(action(1),/read-only/);
+ for(const [name,action] of Object.entries(actions)) {
+  if(name==='deleteArticle')assert.equal((await action(1)).code,'READ_ONLY');
+  else await assert.rejects(action(1),/read-only/);
+ }
  const editor=load('app/admin/editor-actions.ts',mocks);
  for(const action of Object.values(editor))await assert.rejects(action(new FormData()),/read-only/);
  await assert.rejects(load('lib/import-rss.ts',mocks).importRSS({feedUrl:'unused'}),/read-only/);

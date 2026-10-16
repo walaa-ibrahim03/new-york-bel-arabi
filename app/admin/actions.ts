@@ -2,7 +2,7 @@
 "use server";
 
 import { canPublish, validateArticleId, validateEditorialArticle } from "../../lib/article-policy";
-import { assertNewsOperationAllowed } from "../../lib/database-guard";
+import { assertNewsOperationAllowed, isNewsReadOnly } from "../../lib/database-guard";
 import { auth } from "../../auth";
 import { prisma } from "../../lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -77,15 +77,25 @@ export async function returnArticleToDraft(id: number) {
 }
 
 export async function deleteArticle(id: number) {
-  await requireAdmin();
-
-  validateArticleId(id);
-  await prisma.article.delete({
-    where: { id },
-  });
-
-  revalidatePath("/admin");
-  revalidatePath("/");
+  if (isNewsReadOnly()) return { ok: false, code: "READ_ONLY", message: "الحذف متوقف لأن هذه النسخة تعمل بوضع القراءة فقط. لم يُحذف الخبر." };
+  try { await requireAdmin(); }
+  catch { return { ok: false, code: "UNAUTHORIZED", message: "انتهت جلسة المدير أو لا تملكين صلاحية الحذف. سجّلي الدخول مجددًا." }; }
+  try { validateArticleId(id); }
+  catch { return { ok: false, code: "INVALID_ID", message: "رقم الخبر غير صالح. أعيدي تحميل الصفحة." }; }
+  try {
+    await prisma.article.delete({ where: { id } });
+  } catch (error) {
+    if (error instanceof Error && /^Database connection guard: (MISMATCH|UNVERIFIABLE)$/.test(error.message)) {
+      return { ok: false, code: "CONNECTION_BLOCKED", message: "منع حارس الاتصال الحذف لتعذّر التحقق من قاعدة البيانات. لم يُحذف الخبر." };
+    }
+    if (error && typeof error === "object" && "code" in error && error.code === "P2025") {
+      return { ok: false, code: "NOT_FOUND", message: "الخبر غير موجود أو حُذف سابقًا. أعيدي تحميل الصفحة." };
+    }
+    return { ok: false, code: "DATABASE_ERROR", message: "تعذّر حذف الخبر من قاعدة البيانات. حاولي مجددًا لاحقًا." };
+  }
+  try { refreshArticle(id); }
+  catch { return { ok: true, code: "DELETED", message: "تم حذف الخبر. أعيدي تحميل الصفحة لتحديث بقية القوائم." }; }
+  return { ok: true, code: "DELETED", message: "تم حذف الخبر نهائيًا." };
 }
 
 
