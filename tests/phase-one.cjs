@@ -62,7 +62,8 @@ test('server enforces review, approval, stale revision protection and auth', asy
 test('RSS retains original text, skips invalid and duplicate entries, starts in draft', async () => {
   const stored=[];
   const { importRSS }=load('lib/import-rss.ts',{
-    './prisma':{prisma:{article:{create:async ({data})=>{if(stored.length) throw {code:'P2002'}; stored.push(data);}}}},
+    './prisma':{prisma:{article:{findMany:async()=>[],create:async ({data})=>{if(stored.length) throw {code:'P2002'}; stored.push(data);}}}},
+    './news-sources':{requireApprovedSource:()=>({feedUrl:'https://example.org/feed',name:'Fictional source'})},
     './rss':{fetchRSS:async ()=>require('./fixtures/phase-one.json').rssItems},
   });
   const result=await importRSS({feedUrl:'unused'});

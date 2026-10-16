@@ -3,12 +3,13 @@
 
 import { categories, normalizeCategory } from "../../lib/categories";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import {
-  createArticle,
-  updateArticle,
+  saveArticle,
   translateArticle,
 } from "./editor-actions";
+import { uploadArticleImage } from "./image-actions";
+import ArticlePreview, { type PreviewArticle } from "./ArticlePreview";
 
 type ArticleData = {
   id: number;
@@ -23,6 +24,7 @@ type ArticleData = {
   borough: string;
   sourceUrl: string;
   imageUrl: string | null;
+  sourceName?: string | null;
 };
 
 export default function ArticleForm({
@@ -35,6 +37,38 @@ export default function ArticleForm({
   const [title, setTitle] = useState(article?.title ?? "");
   const [summary, setSummary] = useState(article?.summary ?? "");
   const [content, setContent] = useState(article?.content ?? "");
+  const [sourceName, setSourceName] = useState(article?.sourceName ?? "");
+  const [sourceUrl, setSourceUrl] = useState(article?.sourceUrl ?? "");
+  const [category, setCategory] = useState(normalizeCategory(article?.category ?? "عام"));
+  const [borough, setBorough] = useState(article?.borough ?? "نيويورك");
+  const [imageUrl, setImageUrl] = useState(article?.imageUrl ?? "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isUploading, startUpload] = useTransition();
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const [preview, setPreview] = useState<PreviewArticle | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [saveState, saveAction, isSaving] = useActionState(saveArticle, { error: "" });
+
+  function showPreview() {
+    if (!formRef.current) return;
+    const data = new FormData(formRef.current);
+    const read = (field: string) => String(data.get(field) ?? "");
+    setPreview({ title: read("title"), summary: read("summary"), content: read("content"), category: read("category"), sourceName: read("sourceName"), sourceUrl: read("sourceUrl"), imageUrl: read("imageUrl") });
+  }
+
+  function handleUpload() {
+    if (!imageFile || isUploading || isSaving) return;
+    setUploadMessage(""); setUploadError("");
+    const form = new FormData(); form.set("image", imageFile);
+    startUpload(async () => {
+      try {
+        const result = await uploadArticleImage(form);
+        if (result.ok) { setImageUrl(result.url); setUploadMessage(result.message); setPreview(null); }
+        else setUploadError(result.message);
+      } catch { setUploadError("تعذّر الاتصال بخدمة رفع الصور. حاولي لاحقًا."); }
+    });
+  }
 
   const [isTranslating, startTranslation] = useTransition();
   const [message, setMessage] = useState("");
@@ -87,7 +121,7 @@ export default function ArticleForm({
         </Link>
 
         <h1 className="mt-6 text-3xl font-bold">
-          {isEditing ? "تعديل الخبر" : "إضافة خبر جديد"}
+          {isEditing ? "تعديل الخبر" : "إضافة خبر يدويًا"}
         </h1>
 
         <p className="mt-2 text-zinc-500">
@@ -110,7 +144,7 @@ export default function ArticleForm({
             <button
               type="button"
               onClick={handleTranslate}
-              disabled={isTranslating || !article.originalTitle}
+              disabled={isTranslating || isSaving || isUploading || !article.originalTitle}
               className="mt-4 rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
             >
               {isTranslating
@@ -133,7 +167,9 @@ export default function ArticleForm({
         )}
 
         <form
-          action={isEditing ? updateArticle : createArticle}
+          ref={formRef}
+          action={saveAction}
+          onChange={() => setPreview(null)}
           className="mt-8 space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
         >
           {article && <>
@@ -191,11 +227,11 @@ export default function ArticleForm({
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="التصنيف">
+            <Field label="القسم">
               <select
                 name="category"
                 required
-                defaultValue={normalizeCategory(article?.category ?? "عام")}
+                value={category} onChange={event => setCategory(event.target.value)}
                 className="input-style"
               >
                 {[...new Set([...categories, ...(article ? [normalizeCategory(article.category)] : [])])].map((category) => (
@@ -208,7 +244,7 @@ export default function ArticleForm({
               <select
                 name="borough"
                 required
-                defaultValue={article?.borough ?? "نيويورك"}
+                value={borough} onChange={event => setBorough(event.target.value)}
                 className="input-style"
               >
                 <option value="نيويورك">نيويورك</option>
@@ -221,13 +257,17 @@ export default function ArticleForm({
             </Field>
           </div>
 
+          <Field label="اسم المصدر">
+            <input name="sourceName" type="text" maxLength={120} required={!isEditing} value={sourceName} onChange={event => setSourceName(event.target.value)} className="input-style" placeholder="اسم الجهة أو الموقع الناشر" />
+          </Field>
+
           <Field label="رابط المصدر الأصلي">
             <input
               name="sourceUrl"
               type="url"
               required
               maxLength={2000}
-              defaultValue={article?.sourceUrl ?? ""}
+              value={sourceUrl} onChange={event => setSourceUrl(event.target.value)}
               dir="ltr"
               className="input-style"
               placeholder="https://example.com/news"
@@ -239,21 +279,43 @@ export default function ArticleForm({
               name="imageUrl"
               type="url"
               maxLength={2000}
-              defaultValue={article?.imageUrl ?? ""}
+              value={imageUrl}
+              onChange={(event) => { setImageUrl(event.target.value); setPreview(null); }}
               dir="ltr"
               className="input-style"
               placeholder="https://example.com/image.jpg"
             />
           </Field>
 
+          <section className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4" aria-label="رفع الصورة الرئيسية">
+            <Field label="رفع صورة رئيسية (اختياري)">
+              <input type="file" accept="image/jpeg,image/png,image/webp" disabled={isUploading || isSaving} onChange={event => {
+                const file = event.target.files?.[0] ?? null;
+                setUploadError(""); setUploadMessage("");
+                if (file && (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024)) { setImageFile(null); setUploadError("اختاري صورة JPEG أو PNG أو WebP حتى 2 ميغابايت."); }
+                else setImageFile(file);
+              }} className="block w-full text-sm" />
+            </Field>
+            <p className="text-sm leading-7 text-zinc-600">ارفعي صورة تملكينها أو تملكين إذن استخدامها. تُفحص على الخادم وتُزال بياناتها الوصفية. الصورة المرفوعة تصبح متاحة لمن يملك رابطها؛ لا ترفعي صورًا خاصة.</p>
+            <button type="button" onClick={handleUpload} disabled={!imageFile || isUploading || isSaving} className="rounded-xl border border-zinc-300 bg-white px-4 py-2 disabled:opacity-50">{isUploading ? "جارٍ رفع الصورة..." : "رفع الصورة"}</button>
+            {uploadMessage && <p role="status" className="text-sm text-green-800">{uploadMessage}</p>}
+            {uploadError && <p role="alert" className="text-sm text-red-700">{uploadError}</p>}
+          </section>
+
+          <p className="text-sm leading-7 text-zinc-600">حفظ الخبر لا ينشره. الإرسال للمراجعة يحتاج اعتماد المدير قبل أن يصبح النشر متاحًا.</p>
+          {saveState.error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{saveState.error}</p>}
+
           <div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-6">
             <button
               type="submit"
-              disabled={isTranslating}
+              name="intent" value="draft"
+              disabled={isTranslating || isUploading || isSaving}
               className="rounded-xl bg-zinc-900 px-6 py-3 font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
             >
-              {isEditing ? "حفظ التعديلات" : "حفظ كمسودة"}
+              {isSaving ? "جارٍ الحفظ..." : isEditing ? "حفظ التعديلات كمسودة" : "حفظ كمسودة"}
             </button>
+            <button type="submit" name="intent" value="review" disabled={isTranslating || isUploading || isSaving} className="rounded-xl bg-amber-400 px-5 py-3 font-bold text-black disabled:opacity-50">حفظ وإرسال للمراجعة</button>
+            <button type="button" onClick={showPreview} className="rounded-xl border border-zinc-300 px-5 py-3">معاينة قبل النشر</button>
 
             <Link
               href="/admin"
@@ -263,6 +325,7 @@ export default function ArticleForm({
             </Link>
           </div>
         </form>
+        {preview && <ArticlePreview article={preview} />}
       </div>
     </main>
   );

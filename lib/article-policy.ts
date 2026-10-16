@@ -17,6 +17,15 @@ export function validateWebUrl(value: string): string {
   }
   return url.href;
 }
+export function normalizeImportedUrl(value: string): string {
+  const url = new URL(validateWebUrl(value));
+  url.hash = "";
+  for (const key of [...url.searchParams.keys()]) {
+    if (/^utm_/i.test(key) || /^(fbclid|gclid)$/i.test(key)) url.searchParams.delete(key);
+  }
+  url.searchParams.sort();
+  return url.href;
+}
 export function validateEditorialArticle(article: { title: string; summary: string; content: string; category: string; sourceUrl: string }) {
   for (const [value, max] of [[article.title, 180], [article.summary, 500], [article.content, 20000]] as const) {
     if (!value.trim() || value.length > max) throw new Error("نص الخبر فارغ أو يتجاوز الحد المسموح.");

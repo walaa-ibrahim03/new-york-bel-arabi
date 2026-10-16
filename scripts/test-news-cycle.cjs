@@ -65,6 +65,7 @@ async function main() {
     }
     const guardedArticle={
       findUnique:(args)=>client.article.findUnique(args),
+      findMany:(args)=>client.article.findMany({...args,where:{sourceUrl:{startsWith:prefix}}}),
       create:(args)=>mutate('create',args),
       updateMany:(args)=>mutate('updateMany',args),
       // Deliberately no delete API is exposed to the harness.
@@ -77,6 +78,7 @@ async function main() {
       'next/cache':{revalidatePath:()=>{}},
       'next/navigation':{redirect:(location)=>assert.equal(location,'/admin')},
       './rss':{fetchRSS:async()=>feedItems},
+      './news-sources':{requireApprovedSource:()=>({feedUrl:prefix+'feed',name:'Synthetic only'})},
       '../../lib/translate-news':{translateNewsToArabic:async(title,summary,content)=>{
         translationCalls++;
         assert.equal(title,fixture.rssItems[0].title);

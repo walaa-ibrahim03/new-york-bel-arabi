@@ -81,7 +81,7 @@ test('staging blocks every news action and RSS/OpenAI before resources are touch
  const unexpected=()=>{touched++;throw new Error('Resource should not be touched');};
  const mocks={
   '../../auth':{auth:unexpected},'../../lib/prisma':{prisma:{}},'./prisma':{prisma:{}},
-  'next/cache':{revalidatePath:unexpected},'next/navigation':{redirect:unexpected},
+  'next/cache':{revalidatePath:unexpected},'next/navigation':{redirect:unexpected,unstable_rethrow:()=>{}},
   '../../lib/import-rss':{importRSS:unexpected},'../../lib/translate-news':{translateNewsToArabic:unexpected},
   './rss':{fetchRSS:unexpected},'server-only':{},openai:{__esModule:true,default:class{constructor(){unexpected();}}},
   'rss-parser':{__esModule:true,default:class{parseURL(){unexpected();}}},
@@ -92,7 +92,10 @@ test('staging blocks every news action and RSS/OpenAI before resources are touch
   else await assert.rejects(action(1),/read-only/);
  }
  const editor=load('app/admin/editor-actions.ts',mocks);
- for(const action of Object.values(editor))await assert.rejects(action(new FormData()),/read-only/);
+ for(const [name,action] of Object.entries(editor)) {
+  if(name==='saveArticle')assert.match((await action({error:''},new FormData())).error,/القراءة فقط/);
+  else await assert.rejects(action(new FormData()),/read-only/);
+ }
  await assert.rejects(load('lib/import-rss.ts',mocks).importRSS({feedUrl:'unused'}),/read-only/);
  await assert.rejects(load('lib/rss.ts',mocks).fetchRSS('unused'),/read-only/);
  await assert.rejects(load('lib/translate-news.ts',mocks).translateNewsToArabic('title','summary','content'),/read-only/);

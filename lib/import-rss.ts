@@ -1,9 +1,10 @@
 import { assertNewsOperationAllowed } from "./database-guard";
 
 import { normalizeCategory } from "./categories";
-import { validateWebUrl } from "./article-policy";
+import { normalizeImportedUrl } from "./article-policy";
 import { prisma } from "./prisma";
 import { fetchRSS } from "./rss";
+import { requireApprovedSource } from "./news-sources";
 
 type ImportRSSOptions = {
   feedUrl: string;
@@ -114,8 +115,12 @@ export async function importRSS({
   limit = 5,
 }: ImportRSSOptions) {
   assertNewsOperationAllowed();
+  const source = requireApprovedSource(feedUrl);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 40) throw new Error("Invalid import limit");
   const articles = await fetchRSS(feedUrl);
+  // Match old tracking URLs too, without changing any existing record.
+  const existing = await prisma.article.findMany({ select: { sourceUrl: true } });
+  const seen = new Set(existing.flatMap(item => { try { return [normalizeImportedUrl(item.sourceUrl)]; } catch { return []; } }));
 
   let imported = 0;
   let skipped = 0;
@@ -134,13 +139,17 @@ export async function importRSS({
 
     let sourceUrl: string;
     try {
-      sourceUrl = validateWebUrl(article.link);
+      sourceUrl = normalizeImportedUrl(article.link);
+      const itemHost = new URL(sourceUrl).hostname.replace(/^www\./, "");
+      const feedHost = new URL(source.feedUrl).hostname.replace(/^www\./, "");
+      if (itemHost !== feedHost) throw new Error("RSS item belongs to another source");
       if (article.title.length > 180 || article.summary.length > 20000 ||
           (article.publishedAt && !Number.isFinite(Date.parse(article.publishedAt)))) throw new Error("Invalid RSS item");
     } catch {
       skipped++;
       continue;
     }
+    if (seen.has(sourceUrl)) { skipped++; continue; }
     const detectedCategory = detectCategory(
       article.title,
       article.summary
@@ -161,6 +170,7 @@ export async function importRSS({
           originalSummary: article.summary,
           originalContent: article.summary || article.title,
           sourceUrl,
+          sourceName: source.name,
           status: "DRAFT",
           category: normalizeCategory(detectedCategory),
           borough: "نيويورك",
@@ -168,6 +178,7 @@ export async function importRSS({
       });
 
       imported++;
+      seen.add(sourceUrl);
     } catch (error) {
       if (
         error !== null &&
@@ -183,7 +194,7 @@ export async function importRSS({
   }
 
   return {
-    source: sourceName,
+    source: source.name || sourceName,
     total: candidates.length,
     imported,
     skipped,

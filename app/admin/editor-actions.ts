@@ -2,13 +2,14 @@
 "use server";
 
 import { normalizeCategory, isKnownCategory } from "../../lib/categories";
-import { validateWebUrl } from "../../lib/article-policy";
-import { assertNewsOperationAllowed } from "../../lib/database-guard";
+import { validateWebUrl, validateEditorialArticle } from "../../lib/article-policy";
+import { assertNewsOperationAllowed, isNewsReadOnly } from "../../lib/database-guard";
 import { auth } from "../../auth";
 import { prisma } from "../../lib/prisma";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { translateNewsToArabic } from "../../lib/translate-news";
+import { newsSources, requireApprovedSource } from "../../lib/news-sources";
 async function requireAdmin() {
   assertNewsOperationAllowed();
   const session = await auth();
@@ -62,6 +63,7 @@ function readArticle(formData: FormData) {
   const borough = readText(formData, "borough", 70);
   const sourceUrl = readText(formData, "sourceUrl", 2000);
   const imageUrl = readText(formData, "imageUrl", 2000, false);
+  const sourceName = formData.has("sourceName") ? readText(formData, "sourceName", 120, false) || null : undefined;
 
   validateUrl(sourceUrl, "Source URL");
   validateUrl(imageUrl, "Image URL");
@@ -73,20 +75,29 @@ function readArticle(formData: FormData) {
     category,
     borough,
     sourceUrl,
+    sourceName,
     imageUrl: imageUrl || null,
   };
+}
+
+function saveStatus(formData: FormData, data: ReturnType<typeof readArticle>) {
+  const intent = formData.get("intent") ?? "draft";
+  if (intent !== "draft" && intent !== "review") throw new Error("Invalid editorial intent");
+  if (intent === "review") validateEditorialArticle(data);
+  return intent === "review" ? "IN_REVIEW" : "DRAFT";
 }
 
 export async function createArticle(formData: FormData) {
   await requireAdmin();
 
   const data = readArticle(formData);
+  if (!data.sourceName) throw new Error("Source name is required");
   if (!isKnownCategory(data.category)) throw new Error("Invalid category");
 
   await prisma.article.create({
     data: {
       ...data,
-      status: "DRAFT",
+      status: saveStatus(formData, data),
     },
   });
 
@@ -119,7 +130,7 @@ export async function updateArticle(formData: FormData) {
     where: { id, revision },
     data: {
       ...data,
-      status: "DRAFT", publishedAt: null,
+      status: saveStatus(formData, data), publishedAt: null,
       reviewedAt: null, reviewedBy: null, approvedAt: null, approvedBy: null,
       revision: { increment: 1 },
     },
@@ -133,6 +144,19 @@ export async function updateArticle(formData: FormData) {
   revalidatePath("/");
 
   redirect("/admin");
+}
+
+export async function saveArticle(_previous: { error: string }, formData: FormData): Promise<{ error: string }> {
+  try {
+    if (formData.has("id")) await updateArticle(formData);
+    else await createArticle(formData);
+    return { error: "" };
+  } catch (error) {
+    unstable_rethrow(error);
+    if (isNewsReadOnly()) return { error: "هذه النسخة تعمل بوضع القراءة فقط؛ لم يُحفظ الخبر." };
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") return { error: "رابط المصدر موجود لخبر آخر. راجعي الأخبار قبل الإضافة." };
+    return { error: "تعذّر الحفظ. تحققي من جلسة المدير والحقول ورابط المصدر، ثم أعيدي تحميل الصفحة إذا تغيّر الخبر." };
+  }
 }
 
 
@@ -156,6 +180,7 @@ export async function translateArticle(articleId: number) {
       originalTitle: true,
       originalSummary: true,
       originalContent: true,
+      sourceUrl: true,
     },
   });
 
@@ -169,6 +194,8 @@ export async function translateArticle(articleId: number) {
   }
 
   if (!article.originalTitle) throw new Error("لا يتوفر أصل محفوظ لهذا الخبر القديم. راجعي المصدر يدويًا.");
+  const source = newsSources.find(item => new URL(item.feedUrl).hostname.replace(/^www\./, "") === new URL(article.sourceUrl).hostname.replace(/^www\./, ""));
+  if (source) requireApprovedSource(source.feedUrl);
 
   // إرسال الأصل المحفوظ فقط إلى OpenAI
   const translation = await translateNewsToArabic(

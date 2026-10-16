@@ -2,7 +2,7 @@
 "use client";
 
 import { statusLabels } from "../../lib/article-policy";
-import { newsSources } from "../../lib/news-sources";
+import { newsSources, isSourceApproved } from "../../lib/news-sources";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
@@ -45,9 +45,11 @@ export default function ArticlesDashboard({
 const [importMessage, setImportMessage] = useState("");
 const [isImporting, setIsImporting] = useState(false);
 const [selectedSource, setSelectedSource] = useState("gothamist");
+const selectedSourceDetails = newsSources.find(source => source.id === selectedSource);
+const sourceApproved = Boolean(selectedSourceDetails && isSourceApproved(selectedSourceDetails));
 
 function handleImportRSS() {
-  if (isPending || isImporting) return;
+  if (isPending || isImporting || readOnly || !sourceApproved) return;
 
   setError("");
   setImportMessage("");
@@ -57,7 +59,7 @@ function handleImportRSS() {
     try {
 const result = await importNewsFromRSS(selectedSource);
       setImportMessage(
-        `تم استيراد ${result.imported} خبر جديد، وتجاوز ${result.skipped} خبر مكرر أو غير صالح.`
+        `حُفظ ${result.imported} خبر كمسودة، وتُجاوز ${result.skipped} خبر مكرر أو غير صالح و${result.irrelevant} خبر خارج الأقسام المستهدفة. لا نشر تلقائي.`
       );
     } catch {
       setError("فشل جلب الأخبار من RSS. حاولي مرة أخرى.");
@@ -161,6 +163,22 @@ const result = await importNewsFromRSS(selectedSource);
             </p>
           </div>
 
+        </header>
+
+        <section aria-label="إضافة الأخبار" className="mb-6 grid gap-4 sm:grid-cols-2">
+          <Link href="/admin/new" className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-amber-400">
+            <h2 className="text-xl font-bold">إضافة خبر يدويًا</h2>
+            <p className="mt-2 text-sm leading-7 text-zinc-600">اكتبي الخبر وأضيفي المصدر والصورة، ثم عاينيه واحفظيه كمسودة أو أرسليه للمراجعة.</p>
+          </Link>
+          <a href="#rss-import" className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm transition hover:border-amber-400">
+            <h2 className="text-xl font-bold">جلب الأخبار تلقائيًا</h2>
+            <p className="mt-2 text-sm leading-7 text-zinc-600">جلب وتصنيف الأخبار من المصادر المعتمدة عند الطلب، ومنع التكرار وحفظ النتائج كمسودات للمراجعة.</p>
+          </a>
+        </section>
+        <section id="rss-import" aria-label="جلب الأخبار تلقائيًا" className="mb-8 space-y-4 rounded-2xl border border-zinc-200 bg-white p-5">
+          <h2 className="text-xl font-bold">جلب الأخبار تلقائيًا</h2>
+          <p className="text-sm leading-7 text-zinc-600">اختاري مصدرًا مرخّصًا ثم ابدئي الجلب. نستخدم النص المتاح في RSS فقط؛ لا نسحب المقال الكامل أو الصور، ولا ننشر أي خبر تلقائيًا.</p>
+          <div className="flex flex-col gap-3 sm:flex-row">
 <select
   value={selectedSource}
   onChange={(e) => setSelectedSource(e.target.value)}
@@ -174,18 +192,15 @@ const result = await importNewsFromRSS(selectedSource);
           <button
   type="button"
   onClick={handleImportRSS}
-  disabled={isPending || isImporting}
+  disabled={isPending || isImporting || readOnly || !sourceApproved}
   className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
 >
-  {isImporting ? "جارٍ جلب الأخبار..." : "جلب الأخبار من RSS"}
+  {isImporting ? "جارٍ جلب الأخبار..." : "جلب الأخبار من RSS كمسودات"}
 </button>
-          <Link
-            href="/admin/new"
-            className="rounded-xl bg-zinc-900 px-5 py-3 font-semibold text-white hover:bg-zinc-700"
-          >
-            + إضافة خبر جديد
-          </Link>
-        </header>
+          </div>
+          {selectedSourceDetails && <a href={selectedSourceDetails.termsUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-amber-700 underline">شروط استخدام {selectedSourceDetails.name} ↗</a>}
+          {!sourceApproved && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm leading-7 text-amber-900">هذا المصدر ينتظر توثيق إذن الاستيراد والترجمة قبل تفعيله. وجود رابط RSS لا يعني السماح بإعادة الاستخدام.</p>}
+        </section>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
           <StatCard label="إجمالي الأخبار" value={visibleArticles.length} />

@@ -162,7 +162,7 @@ export default async function ArticlePage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="mt-3 inline-block break-all text-sm text-amber-700 underline"
               >
-                زيارة المصدر الأصلي ↗
+                {article.sourceName || "زيارة المصدر الأصلي"} ↗
               </a>
             </div>
           </div>

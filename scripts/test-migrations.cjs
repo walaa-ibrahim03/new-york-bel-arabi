@@ -12,10 +12,12 @@ const names = [
   '20261012184936_add_article_fields',
   '20261015135634_unique_article_source_url',
   '20261015160000_original_text_and_review',
+  '20261016160000_article_source_name',
 ];
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const oldColumns = ['id','title','content','sourceUrl','imageUrl','status','createdAt','publishedAt','borough','category','color','summary'];
-const newColumns = ['originalTitle','originalSummary','originalContent','reviewedAt','reviewedBy','approvedAt','approvedBy','revision'];
+const reviewColumns = ['originalTitle','originalSummary','originalContent','reviewedAt','reviewedBy','approvedAt','approvedBy','revision'];
+const newColumns = [...reviewColumns, 'sourceName'];
 async function main() {
   const mode = process.argv[2];
   if (!['inspect','apply'].includes(mode)) throw new Error('INVALID_MODE');
@@ -48,7 +50,7 @@ async function main() {
         }
         if (hasArticle !== (history.length > 0)) throw new Error('UNTRACKED_SCHEMA');
         const columns = hasArticle ? await tx.$queryRaw`SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Article' ORDER BY ordinal_position` : [];
-        const expected = history.length === 0 ? [] : history.length === 1 ? oldColumns.slice(0,8) : history.length === 4 ? [...oldColumns,...newColumns] : oldColumns;
+        const expected = history.length === 0 ? [] : history.length === 1 ? oldColumns.slice(0,8) : history.length === 4 ? [...oldColumns,...reviewColumns] : history.length === 5 ? [...oldColumns,...newColumns] : oldColumns;
         if (JSON.stringify(columns.map(c=>c.column_name).sort()) !== JSON.stringify([...expected].sort())) throw new Error('UNEXPECTED_COLUMNS');
         let rows=[];
         if (hasArticle && history.length >= 2) rows = await tx.$queryRaw`SELECT "id", "title", "content", "sourceUrl", "imageUrl", "status", "createdAt", "publishedAt", "borough", "category", "color", "summary" FROM "Article" ORDER BY "id"`;
@@ -83,7 +85,7 @@ async function main() {
     const result=spawnSync(process.execPath,[require.resolve('prisma/build/index.js'),'migrate','deploy','--config',configPath],{cwd:isolated,env,encoding:'utf8',timeout:120000,maxBuffer:2*1024*1024});
     if(result.status!==0 || result.error) throw new Error('MIGRATE_DEPLOY_FAILED');
     const after=await inspect();
-    if (after.history.length!==4 || before.count!==after.count || (before.history.length>=2 && before.digest!==after.digest)) throw new Error('POSTCHECK_FAILED');
+    if (after.history.length!==names.length || before.count!==after.count || (before.history.length>=2 && before.digest!==after.digest)) throw new Error('POSTCHECK_FAILED');
     for (const name of newColumns) {
       const column=after.columns.find(c=>c.column_name===name);
       if(!column || (name==='revision' ? column.is_nullable!=='NO' || column.column_default!=='0' || column.data_type!=='integer' : column.is_nullable!=='YES' || column.data_type!==(name.endsWith('At')?'timestamp without time zone':'text'))) throw new Error('COLUMN_CHECK_FAILED');

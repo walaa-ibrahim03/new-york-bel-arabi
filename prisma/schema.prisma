@@ -15,6 +15,7 @@ datasource db {
 }
 
 model Article {
+  sourceName String?
   originalTitle String?
   originalSummary String?
   originalContent String?
