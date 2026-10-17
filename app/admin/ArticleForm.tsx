@@ -31,17 +31,19 @@ type ArticleData = {
 
 export default function ArticleForm({
   article,
+  discoverySource,
 }: {
   article?: ArticleData;
+  discoverySource?: { name: string; url: string; title: string };
 }) {
   const isEditing = Boolean(article);
   const hasOriginal = Boolean(article?.originalTitle || article?.originalSummary || article?.originalContent);
 
-  const [title, setTitle] = useState(article?.title ?? "");
+  const [title, setTitle] = useState(article?.title ?? discoverySource?.title ?? "");
   const [summary, setSummary] = useState(article?.summary ?? "");
   const [content, setContent] = useState(article?.content ?? "");
-  const [sourceName, setSourceName] = useState(article?.sourceName ?? "");
-  const [sourceUrl, setSourceUrl] = useState(article?.sourceUrl ?? "");
+  const [sourceName, setSourceName] = useState(article?.sourceName ?? discoverySource?.name ?? "");
+  const [sourceUrl, setSourceUrl] = useState(article?.sourceUrl ?? discoverySource?.url ?? "");
   const [category, setCategory] = useState(normalizeCategory(article?.category ?? "عام"));
   const [borough, setBorough] = useState(article?.borough ?? "نيويورك");
   const [imageUrl, setImageUrl] = useState(article?.imageUrl ?? "");
@@ -79,7 +81,7 @@ export default function ArticleForm({
 
   const seo = newsMetadata({ id: article?.id ?? 1, title, summary, category, imageUrl, publishedAt: null });
   const [targetWords, setTargetWords] = useState(60);
-  const [factsOnly, setFactsOnly] = useState(false);
+  const [factsOnly, setFactsOnly] = useState(Boolean(discoverySource));
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [assistantPreview, setAssistantPreview] = useState<EditorText | null>(null);
   const [pendingOriginal, setPendingOriginal] = useState("");
@@ -138,10 +140,11 @@ export default function ArticleForm({
             : "أدخلي معلومات الخبر. سيتم حفظه كمسودة."}
         </p>
 
+        {discoverySource && <p className="mt-5 rounded-xl bg-sky-50 p-4 text-sm leading-7" role="status">إعداد خبر من الوقائع: المصدر محدد مسبقًا. أدخلي رابط الخبر المحدد، واكتبي عنوانًا ونقاط الوقائع بأسلوبك في الملخص، دون لصق المقال. أكدي مراجعتها ثم اختاري التلخيص لإعداد معاينة عربية 40–80 كلمة. هذا لا يجلب نصًا من الرابط ولا يحفظ أو ينشر تلقائيًا.</p>}
         <section className="mt-6 space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5" aria-label="مساعد تحرير الأخبار">
           <h2 className="text-lg font-bold">مساعد تحرير الأخبار</h2>
           <p className="text-sm">{language === "en" ? "النص يبدو إنجليزيًا؛ نقترح الترجمة إلى العربية." : language === "ar" ? "النص يبدو عربيًا؛ نقترح التلخيص والتبسيط." : "النص مختلط أو غير كافٍ؛ اختاري العملية يدويًا."} الاقتراح لا يشغّل الذكاء الاصطناعي تلقائيًا.</p>
-          <label className="flex items-start gap-2 text-sm leading-7"><input type="checkbox" disabled={isTranslating} checked={rightsConfirmed} onChange={e => setRightsConfirmed(e.target.checked)} />النص من كتابتي أو لدي إذن يسمح بترجمته أو تلخيصه. للنصوص المحمية اكتبي الوقائع فقط بأسلوبك واختاري تغطية الوقائع.</label>
+          <label className="flex items-start gap-2 text-sm leading-7"><input type="checkbox" disabled={isTranslating} checked={rightsConfirmed} onChange={e => setRightsConfirmed(e.target.checked)} />{factsOnly ? "راجعت الوقائع المتاحة لي قانونيًا وكتبتها بأسلوبي؛ لم ألصق مقالًا محميًا أو شائعة." : "النص من كتابتي أو لدي إذن يسمح بترجمته أو تلخيصه. للنصوص المحمية اكتبي الوقائع فقط بأسلوبك واختاري تغطية الوقائع."}</label>
           <div className="flex flex-wrap gap-4 text-sm">
             <label>الطول المستهدف بالكلمات<input type="number" min={30} max={160} value={targetWords} onChange={e => setTargetWords(Number(e.target.value))} className="input-style" /></label>
             <label>نوع المادة<select value={factsOnly ? "facts" : "licensed"} onChange={e => setFactsOnly(e.target.value === "facts")} className="input-style"><option value="licensed">نصي أو نص مرخّص</option><option value="facts">وقائع مؤكدة كتبتها بأسلوبي</option></select></label>

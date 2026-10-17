@@ -8,11 +8,13 @@ export type NewsSource = {
   category: (typeof categories)[number];
   termsUrl: string;
   permission: { automaticImport: boolean; translation: boolean; reference: string };
+  discovery?: { automatic: boolean; reference: string };
   coverage?: "US" | "WORLD" | "NY";
 };
 
 export const newsSources: NewsSource[] = [
   {
+    discovery: { automatic: true, reference: "Official NASA RSS news releases; titles and links for informational discovery. Reviewed 2026-10-17." },
     id: "nasa-releases", name: "NASA", feedUrl: "https://www.nasa.gov/news-release/feed/",
     category: "أخبار أمريكا", coverage: "US",
     termsUrl: "https://www.nasa.gov/nasa-brand-center/images-and-media/",
@@ -62,4 +64,11 @@ export function requireFullTranslationPermission(sourceUrl: string) {
   if (source) { requireApprovedSource(source.feedUrl); return; }
   const publishers = ["cnn.com", "bbc.com", "bbc.co.uk", "aljazeera.net", "aljazeera.com", "reuters.com", "apnews.com", "ap.org", "alarabiya.net", "alarabiya.com"];
   if (publishers.some(domain => host === domain || host.endsWith(`.${domain}`))) throw new Error("الترجمة الكاملة لهذا المصدر تحتاج إذنًا. استخدمي موجز الوقائع المؤكدة بدلًا منها.");
+}
+
+// Discovery is independent of permission to translate/store/re-publish articles.
+export function requireDiscoverySource(feedUrl: string) {
+  const source = newsSources.find(item => item.feedUrl === feedUrl);
+  if (!source?.discovery?.automatic || !source.discovery.reference.trim()) throw new Error("الاكتشاف الآلي غير معتمد لهذا المصدر؛ استخدمي المتابعة الرسمية وفق شروطها.");
+  return source;
 }

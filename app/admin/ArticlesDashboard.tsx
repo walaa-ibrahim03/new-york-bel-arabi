@@ -4,6 +4,7 @@
 import { statusLabels } from "../../lib/article-policy";
 import { newsSources, isSourceApproved } from "../../lib/news-sources";
 import Link from "next/link";
+import SourceDiscovery from "./SourceDiscovery";
 import { useMemo, useState, useTransition } from "react";
 
 import {
@@ -40,7 +41,7 @@ export default function ArticlesDashboard({
   const [deleteFeedback, setDeleteFeedback] = useState<{ id: number; ok: boolean; message: string } | null>(null);
 const [importMessage, setImportMessage] = useState("");
 const [isImporting, setIsImporting] = useState(false);
-const [selectedSource, setSelectedSource] = useState("gothamist");
+const [selectedSource, setSelectedSource] = useState(newsSources.find(isSourceApproved)?.id ?? "");
 const selectedSourceDetails = newsSources.find(source => source.id === selectedSource);
 const sourceApproved = Boolean(selectedSourceDetails && isSourceApproved(selectedSourceDetails));
 
@@ -165,13 +166,14 @@ const result = await importNewsFromRSS(selectedSource);
         <section aria-label="إضافة الأخبار" className="mb-6 grid gap-4 sm:grid-cols-2">
           <Link href="/admin/new" className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-amber-400">
             <h2 className="text-xl font-bold">إضافة خبر يدويًا</h2>
-            <p className="mt-2 text-sm leading-7 text-zinc-600">اكتبي الخبر وأضيفي المصدر والصورة، ثم عاينيه واحفظيه كمسودة أو أرسليه للمراجعة.</p>
+            <p className="mt-2 text-sm leading-7 text-zinc-600">اكتبي الخبر وأضيفي المصدر والصورة، ثم عاينيه واحفظيه كمسودة أو انشريه بعد التأكيد.</p>
           </Link>
-          <a href="#rss-import" className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm transition hover:border-amber-400">
-            <h2 className="text-xl font-bold">جلب الأخبار تلقائيًا</h2>
-            <p className="mt-2 text-sm leading-7 text-zinc-600">جلب وتصنيف الأخبار من المصادر المعتمدة عند الطلب، ومنع التكرار وحفظ النتائج كمسودات للمراجعة.</p>
+          <a href="#news-discovery" className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm transition hover:border-amber-400">
+            <h2 className="text-xl font-bold">اكتشاف الأخبار والمصادر</h2>
+            <p className="mt-2 text-sm leading-7 text-zinc-600">CNN وBBC والجزيرة وغيرها: متابعة رسمية، ثم إعداد خبر عربي من وقائع متاحة قانونيًا. الاستيراد النصي منفصل.</p>
           </a>
         </section>
+        <SourceDiscovery readOnly={readOnly} />
         <section id="rss-import" aria-label="جلب الأخبار تلقائيًا" className="mb-8 space-y-4 rounded-2xl border border-zinc-200 bg-white p-5">
           <h2 className="text-xl font-bold">جلب الأخبار تلقائيًا</h2>
           <p className="text-sm leading-7 text-zinc-600">اختاري مصدرًا مرخّصًا ثم ابدئي الجلب. نستخدم النص المتاح في RSS فقط؛ لا نسحب المقال الكامل أو الصور، ولا ننشر أي خبر تلقائيًا.</p>
@@ -183,7 +185,7 @@ const result = await importNewsFromRSS(selectedSource);
   aria-label="اختيار مصدر الأخبار"
   className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900"
 >
-  {newsSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+  {newsSources.map((source) => <option key={source.id} value={source.id} disabled={!isSourceApproved(source)}>{source.name}{!isSourceApproved(source) ? " — استيراد النص معطّل؛ متاح في دليل المتابعة" : " — استيراد معتمد"}</option>)}
 </select>
 
           <button
@@ -196,7 +198,7 @@ const result = await importNewsFromRSS(selectedSource);
 </button>
           </div>
           {selectedSourceDetails && <a href={selectedSourceDetails.termsUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-amber-700 underline">شروط استخدام {selectedSourceDetails.name} ↗</a>}
-          {!sourceApproved && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm leading-7 text-amber-900">هذا المصدر ينتظر توثيق إذن الاستيراد والترجمة قبل تفعيله. وجود رابط RSS لا يعني السماح بإعادة الاستخدام.</p>}
+          {!sourceApproved && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm leading-7 text-amber-900">استيراد النص وترجمته آليًا غير معتمد لهذا المصدر. يمكنك متابعة المصدر الرسمي وإعداد خبر من الوقائع عبر قسم اكتشاف الأخبار أعلاه.</p>}
         </section>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">

@@ -13,3 +13,20 @@ export const sourceDirectory = [
   { name: "USCIS", languages: "English / ترجمات مختارة", url: "https://www.uscis.gov/", follow: "https://www.uscis.gov/newsroom", method: "الأخبار والتنبيهات الرسمية للهجرة؛ متابعة يدوية", terms: "https://www.uscis.gov/website-policies", reuse: "مصدر أولي للوقائع؛ مراجعة حقوق كل مادة وصورة" },
   { name: "NASA — البيانات الصحفية", languages: "English", url: "https://www.nasa.gov/", follow: "https://www.nasa.gov/rss-feeds/", method: "RSS رسمي للبيانات الصحفية؛ موصل تجريبي جاهز للجلب كمسودات", terms: "https://www.nasa.gov/nasa-brand-center/images-and-media/", reuse: "معلومات NASA مع نسبها، دون إيحاء تأييد أو جلب صور/مواد أطراف ثالثة" },
 ] as const;
+
+export function discoveryEditorLink(sourceUrl: string, articleUrl?: string, headline?: string) {
+  const params = new URLSearchParams({ source: sourceUrl });
+  if (articleUrl) params.set("url", articleUrl);
+  if (headline) params.set("headline", headline);
+  return `/admin/new?${params}`;
+}
+export function sourceFromDirectory(value: unknown) {
+  return typeof value === "string" ? sourceDirectory.find(source => source.url === value) : undefined;
+}
+export function directoryArticleUrl(source: { url: string }, value: unknown) {
+  if (typeof value !== "string" || value.length > 2000) return "";
+  try {
+    const url = new URL(value), expected = new URL(source.url).hostname.replace(/^www\./, "");
+    return url.protocol === "https:" && !url.username && !url.password && url.hostname.replace(/^www\./, "") === expected ? url.href : "";
+  } catch { return ""; }
+}

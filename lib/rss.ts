@@ -2,12 +2,13 @@ import { assertNewsOperationAllowed, requireDatabaseTarget } from "./database-gu
 
 import Parser from "rss-parser";
 
-import { requireApprovedSource } from "./news-sources";
+import { requireApprovedSource, requireDiscoverySource } from "./news-sources";
 const parser = new Parser({ timeout: 15000, maxRedirects: 0 });
 
-export async function fetchRSS(feedUrl: string) {
+export async function fetchRSS(feedUrl: string, purpose: "import" | "headlines" = "import") {
   assertNewsOperationAllowed();
-  requireApprovedSource(feedUrl);
+  if (purpose === "headlines") requireDiscoverySource(feedUrl);
+  else requireApprovedSource(feedUrl);
   requireDatabaseTarget();
   const feed = await parser.parseURL(feedUrl);
 
@@ -15,6 +16,6 @@ export async function fetchRSS(feedUrl: string) {
     title: item.title?.trim() ?? "",
     link: item.link?.trim() ?? "",
     publishedAt: item.pubDate ?? "",
-    summary: item.contentSnippet?.trim() ?? "",
+    summary: purpose === "headlines" ? "" : item.contentSnippet?.trim() ?? "",
   }));
 }
