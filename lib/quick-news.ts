@@ -15,9 +15,9 @@ const topics: Record<string, RegExp> = {
 export type QuickCandidate = { sourceId: string; sourceName: string; title: string; summary: string; url: string; date: string; category: string; borough: string; expires: number };
 export function matchQuickSection(section: string, title: string, summary: string, coverage?: string) {
   if (section === "trend") return false; // No external interest metric is configured.
-  return (section === "us" && coverage === "US") || (section === "ny" && coverage === "NY") || Boolean(topics[section]?.test(`${title} ${summary}`));
+  return (section === "us" && (coverage === "US" || coverage === "NY")) || (section === "ny" && coverage === "NY") || Boolean(topics[section]?.test(`${title} ${summary}`));
 }
-export function quickCandidates(items: {title:string;summary:string;link:string;publishedAt:string}[], source: {id:string;name:string;feedUrl:string;coverage?:string}, section: string, existingUrls: string[], now = Date.now()): QuickCandidate[] {
+export function quickCandidates(items: {title:string;summary:string;link:string;publishedAt:string;topics?:string[]}[], source: {id:string;name:string;feedUrl:string;coverage?:string}, section: string, existingUrls: string[], now = Date.now()): QuickCandidate[] {
   const selected = quickSections.find(item => item.id === section);
   if (!selected || section === "trend") throw new Error("لا يتوفر مؤشر اهتمام موثق للترند؛ اختاري قسمًا آخر.");
   const seen = new Set(existingUrls.flatMap(url => { try { return [normalizeImportedUrl(url)]; } catch { return []; } }));
@@ -26,9 +26,9 @@ export function quickCandidates(items: {title:string;summary:string;link:string;
     try {
       const url = normalizeImportedUrl(item.link), title = item.title.replace(/<[^>]*>/g, "").trim(), summary = item.summary.trim();
       const date = Date.parse(item.publishedAt);
-      if (new URL(url).hostname.replace(/^www\./, "") !== host || !title || title.length > 180 || summary.length < 30 || summary.length > 8000 || !Number.isFinite(date) || date > now || seen.has(url) || !matchQuickSection(section, title, summary, source.coverage)) return [];
+      if (new URL(url).hostname.replace(/^www\./, "") !== host || !title || title.length > 180 || summary.length > 8000 || !Number.isFinite(date) || date > now || seen.has(url) || !matchQuickSection(section, title, (item.topics ?? []).join(" "), source.coverage)) return [];
       seen.add(url);
-      return [{ sourceId: source.id, sourceName: source.name, title, summary, url, date: new Date(date).toISOString(), category: selected.category, borough: section === "ny" ? "نيويورك" : section === "world" ? "العالم" : source.coverage === "US" ? "أمريكا" : "العالم", expires: now + 20 * 60_000 }];
+      return [{ sourceId: source.id, sourceName: source.name, title, summary, url, date: new Date(date).toISOString(), category: selected.category, borough: section === "ny" ? "نيويورك" : section === "world" ? "العالم" : source.coverage === "NY" ? "نيويورك" : source.coverage === "US" ? "أمريكا" : "العالم", expires: now + 20 * 60_000 }];
     } catch { return []; }
   }).sort((a,b) => Date.parse(b.date)-Date.parse(a.date)).slice(0,5);
 }

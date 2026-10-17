@@ -16,6 +16,7 @@ export async function fetchRSS(feedUrl: string, purpose: "import" | "headlines" 
     title: item.title?.trim() ?? "",
     link: item.link?.trim() ?? "",
     publishedAt: item.pubDate ?? "",
+    topics: (item.categories ?? []).filter(value => typeof value === "string").slice(0, 20).map(value => value.slice(0, 100)),
     summary: purpose === "headlines" ? "" : item.contentSnippet?.trim() ?? "",
   }));
 }

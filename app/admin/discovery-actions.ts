@@ -2,7 +2,7 @@
 import { auth } from "../../auth";
 import { assertNewsOperationAllowed, requireDatabaseTarget } from "../../lib/database-guard";
 import { fetchRSS } from "../../lib/rss";
-import { newsSources, requireDiscoverySource } from "../../lib/news-sources";
+import { sourceForDirectory, requireDiscoverySource } from "../../lib/news-sources";
 import { sourceFromDirectory, directoryArticleUrl } from "../../lib/source-directory";
 import { normalizeImportedUrl } from "../../lib/article-policy";
 
@@ -13,7 +13,7 @@ export async function discoverNewsHeadlines(sourceUrl: string) {
     if (!admin || session?.user?.email?.trim().toLowerCase() !== admin) return { ok: false as const, message: "سجّلي الدخول بحساب المدير." };
     requireDatabaseTarget();
     const directory = sourceFromDirectory(sourceUrl);
-    const source = directory && newsSources.find(item => new URL(item.feedUrl).hostname.replace(/^www\./, "") === new URL(directory.url).hostname.replace(/^www\./, ""));
+    const source = directory && sourceForDirectory(directory.url);
     if (!source) return { ok: false as const, message: "المتابعة الرسمية اليدوية متاحة؛ الجمع الآلي غير معتمد لهذا المصدر، ولا نستورد نصوصه." };
     requireDiscoverySource(source.feedUrl);
     const items = await fetchRSS(source.feedUrl, "headlines");
