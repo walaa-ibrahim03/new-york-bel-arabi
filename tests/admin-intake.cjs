@@ -60,7 +60,7 @@ test('dashboard exposes both intake paths and keeps unapproved source import dis
  const Dashboard=load('app/admin/ArticlesDashboard.tsx',{'next/link':{__esModule:true,default:'a'},'./quick-actions':{searchQuickNews:()=>{throw Error('No automatic discovery in render');}},'./actions':{}}).default;
  const html=renderToStaticMarkup(React.createElement(Dashboard,{articles:[],readOnly:false}));
  for(const value of ['إضافة خبر يدويًا','النشر السريع للأخبار','sm:grid-cols-2','href="/admin/new"','id="news-discovery"','مصدر الأخبار السريع'])assert.ok(html.includes(value),value);
- assert.ok(html.includes("جلب أحدث 5 أخبار"));
+ assert.ok(html.includes("جلب أحدث الأخبار"));
  assert.ok(html.includes("تجهيز الأخبار المختارة"));
 });
 test('known publisher translation is blocked when permission is missing; own synthetic original remains separate',async()=>environment({ADMIN_EMAIL:'admin@example.org',NYBA_NEWS_MODE:'read-write'},async()=>{

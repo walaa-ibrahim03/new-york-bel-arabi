@@ -6,6 +6,10 @@ export type NewsSource = {
   name: string;
   feedUrl: string;
   directoryUrl?: string;
+  officialNY?: boolean;
+  rssFacts?: { allowed: boolean; reference: string };
+  articlePrefix?: string;
+  maxAgeHours?: number;
   discoveryStatus?: string;
   category: (typeof categories)[number];
   termsUrl: string;
@@ -52,6 +56,31 @@ export const newsSources: NewsSource[] = [
     termsUrl: "https://www.amny.com/terms-of-use/",
     permission: { automaticImport: false, translation: false, reference: "" },
   },
+  {
+    id: "nyc-notify", name: "Notify NYC", feedUrl: "https://feeds.everbridge.net/feeds/453003085617722/rss/rss.xml",
+    directoryUrl: "https://a858-nycnotify.nyc.gov/notifynyc/", officialNY: true, coverage: "NY", category: "أخبار محلية", maxAgeHours: 6,
+    articlePrefix: "https://feeds.everbridge.net/feeds/453003085617722/cap/",
+    termsUrl: "https://a858-nycnotify.nyc.gov/notifynyc/home/faq",
+    discovery: { automatic: true, reference: "Notify NYC official FAQ links this exact public Everbridge RSS for delivering City alerts. Verified 2026-10-17." },
+    rssFacts: { allowed: true, reference: "Official public warning RSS facts for original attributed editorial briefs; no article/image reuse or endorsement. NYC terms reserve content rights. See docs/official-ny-news-ar.md." },
+    permission: { automaticImport: false, translation: false, reference: "" },
+  },
+  {
+    id: "nys-dot", name: "NYSDOT", feedUrl: "https://www.dot.ny.gov/rss/press-releases.xml",
+    directoryUrl: "https://www.dot.ny.gov/", officialNY: true, coverage: "NY", category: "مواصلات", maxAgeHours: 336,
+    termsUrl: "https://www.dot.ny.gov/rss/RSSFeeds",
+    discovery: { automatic: true, reference: "Official NYSDOT RSS guide explicitly offers press-release headlines, summaries and links to feed readers. Verified 2026-10-17." },
+    rssFacts: { allowed: true, reference: "RSS summary facts for original attributed briefs only; not full article translation or image republication. See docs/official-ny-news-ar.md." },
+    permission: { automaticImport: false, translation: false, reference: "" },
+  },
+  {
+    id: "uscis-ny", name: "USCIS", feedUrl: "https://www.uscis.gov/news/rss-feed/23269",
+    directoryUrl: "https://www.uscis.gov/", officialNY: true, coverage: "US", category: "الهجرة والإقامة", maxAgeHours: 336,
+    termsUrl: "https://www.uscis.gov/website-policies",
+    discovery: { automatic: true, reference: "USCIS website policies offers official RSS; feed verified live 2026-10-17. Filter NY-related items and general application/policy notices, not unrelated local cases." },
+    rssFacts: { allowed: true, reference: "First-party federal RSS facts only for original attributed briefs; no third-party images or wholesale article import. See docs/official-ny-news-ar.md." },
+    permission: { automaticImport: false, translation: false, reference: "" },
+  },
 ];
 
 // Enable only after recording permission covering this site's automated storage
@@ -83,4 +112,18 @@ export function requireDiscoverySource(feedUrl: string) {
 
 export function sourceForDirectory(directoryUrl: string) {
   return newsSources.find(source => source.directoryUrl === directoryUrl || new URL(source.feedUrl).hostname.replace(/^www\./, "") === new URL(directoryUrl).hostname.replace(/^www\./, ""));
+}
+
+export function requireRssFactsSource(feedUrl: string) {
+  const source = requireDiscoverySource(feedUrl);
+  if (!source.rssFacts?.allowed || !source.rssFacts.reference.trim()) throw new Error("RSS facts not approved");
+  return source;
+}
+export function isSourceArticleUrl(source: { feedUrl: string; articlePrefix?: string }, value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password &&
+      url.hostname.replace(/^www\./, "") === new URL(source.feedUrl).hostname.replace(/^www\./, "") &&
+      (!source.articlePrefix || url.href.startsWith(source.articlePrefix));
+  } catch { return false; }
 }

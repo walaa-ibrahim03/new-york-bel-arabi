@@ -3,7 +3,8 @@ import { auth } from "../../auth";
 import { assertNewsOperationAllowed, requireDatabaseTarget } from "../../lib/database-guard";
 import { prisma } from "../../lib/prisma";
 import { fetchRSS } from "../../lib/rss";
-import { newsSources, isSourceApproved, sourceForDirectory, requireDiscoverySource } from "../../lib/news-sources";
+import { newsSources, isSourceApproved, sourceForDirectory, requireDiscoverySource, isSourceArticleUrl } from "../../lib/news-sources";
+import { collectOfficialNews } from "../../lib/official-news";
 import { sourceFromDirectory } from "../../lib/source-directory";
 import { quickCandidates, quickSections, signQuickCandidate, readQuickCandidate, headlineSupportsBrief } from "../../lib/quick-news";
 import { translateNewsToArabic } from "../../lib/translate-news";
@@ -24,6 +25,11 @@ export async function searchQuickNews(sourceUrl: string, section: string) {
     await admin(false);
     if (!quickSections.some(item => item.id === section)) throw new Error("Invalid section");
     if (section === "trend") return { ok: false as const, message: "لا يتوفر مؤشر اهتمام حقيقي موثق للترند حاليًا؛ اختاري قسمًا آخر. لا نسمّي الأحدث ترندًا." };
+    if (sourceUrl === "official-ny") {
+      const existing = await prisma.article.findMany({ select: { sourceUrl: true, title: true } });
+      const result = await collectOfficialNews(section, existing, fetchRSS);
+      return { ok: true as const, checkedAt: new Date().toISOString(), workingSources: result.workingSources, unavailableSources: result.unavailableSources, items: result.items.map(item => ({ title:item.title,source:item.sourceName,date:item.date,url:item.url,needsFacts:false,token:signQuickCandidate(item) })) };
+    }
     const directory = sourceFromDirectory(sourceUrl);
     const source = directory && sourceForDirectory(directory.url);
     if (!source) return { ok: false as const, message: "لا يوجد RSS/API مصرح به لهذا المصدر لدينا. المتابعة اليدوية متاحة وفق شروطه؛ لا نتجاوز قيود الوصول." };
@@ -42,15 +48,15 @@ export async function prepareQuickDraft(token: string, factsInput?: { facts: str
     const item = readQuickCandidate(token), source = newsSources.find(source => source.id === item.sourceId);
     if (!source) throw new Error("Invalid source");
     requireDiscoverySource(source.feedUrl);
-    if (new URL(item.url).hostname.replace(/^www\./, "") !== new URL(source.feedUrl).hostname.replace(/^www\./, "") || normalizeImportedUrl(item.url) !== item.url || !quickSections.some(section => section.category === item.category && section.id !== "trend")) throw new Error("Invalid selection");
+    if (!isSourceArticleUrl(source, item.url) || normalizeImportedUrl(item.url) !== item.url || !quickSections.some(section => section.category === item.category && section.id !== "trend")) throw new Error("Invalid selection");
     const existing = await prisma.article.findMany({ select: { sourceUrl: true } });
     if (existing.some(row => { try { return normalizeImportedUrl(row.sourceUrl) === item.url; } catch { return false; } })) return { ok: false as const, message:"هذا الخبر محفوظ بالفعل؛ لم يُستدعَ الذكاء الاصطناعي مجددًا." };
     // Discovery tokens contain metadata only. Retrieve a snippet for this selection
     // only when the separate text permission permits it; never fetch the article.
     const licensed = isSourceApproved(source);
     let excerpt = "";
-    if (licensed) {
-      const selected = (await fetchRSS(source.feedUrl, "import")).find(row => { try { return normalizeImportedUrl(row.link) === item.url; } catch { return false; } });
+    if (licensed || source.rssFacts?.allowed) {
+      const selected = (await fetchRSS(source.feedUrl, licensed ? "import" : "facts")).find(row => { try { return normalizeImportedUrl(row.link) === item.url; } catch { return false; } });
       excerpt = selected?.summary.trim() ?? "";
       if (excerpt.length > 8000) excerpt = "";
     }
@@ -72,6 +78,7 @@ export async function prepareQuickDraft(token: string, factsInput?: { facts: str
     const draft = await translateNewsToArabic(item.title,facts,facts,licensed && !extra ? "licensed" : "facts",60,{sourceName:source.name,limited});
     validateBriefNumbers(`${item.title} ${facts}`,draft,false);
     validateEditorialArticle({...draft,category:item.category,sourceUrl:item.url});
+    if (/https?:\/\/|<[^>]+>/.test(`${draft.title} ${draft.summary}`)) throw new Error("Plain editorial text required");
     const words = draft.summary.split(/\s+/).filter(Boolean).length;
     if (words < 1 || words > 80) throw new Error("Summary needs editorial review");
     if (!/[\u0621-\u064A]/.test(draft.title) || !/[\u0621-\u064A]/.test(draft.summary)) throw new Error("Arabic draft required");
