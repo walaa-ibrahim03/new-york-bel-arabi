@@ -13,15 +13,15 @@ import { aiFailureMessage } from "../../lib/ai-errors";
 import { updateArticle } from "./editor-actions";
 import { revalidatePath } from "next/cache";
 
-async function admin() {
-  assertNewsOperationAllowed();
+async function admin(write = true) {
+  if (write) assertNewsOperationAllowed();
   const expected = process.env.ADMIN_EMAIL?.trim().toLowerCase(), session = await auth();
   if (!expected || session?.user?.email?.trim().toLowerCase() !== expected) throw new Error("Unauthorized");
   requireDatabaseTarget();
 }
 export async function searchQuickNews(sourceUrl: string, section: string) {
   try {
-    await admin();
+    await admin(false);
     if (!quickSections.some(item => item.id === section)) throw new Error("Invalid section");
     if (section === "trend") return { ok: false as const, message: "لا يتوفر مؤشر اهتمام حقيقي موثق للترند حاليًا؛ اختاري قسمًا آخر. لا نسمّي الأحدث ترندًا." };
     const directory = sourceFromDirectory(sourceUrl);

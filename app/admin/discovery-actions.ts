@@ -1,6 +1,6 @@
 "use server";
 import { auth } from "../../auth";
-import { assertNewsOperationAllowed, requireDatabaseTarget } from "../../lib/database-guard";
+import { requireDatabaseTarget } from "../../lib/database-guard";
 import { fetchRSS } from "../../lib/rss";
 import { sourceForDirectory, requireDiscoverySource } from "../../lib/news-sources";
 import { sourceFromDirectory, directoryArticleUrl } from "../../lib/source-directory";
@@ -8,7 +8,6 @@ import { normalizeImportedUrl } from "../../lib/article-policy";
 
 export async function discoverNewsHeadlines(sourceUrl: string) {
   try {
-    assertNewsOperationAllowed();
     const admin = process.env.ADMIN_EMAIL?.trim().toLowerCase(), session = await auth();
     if (!admin || session?.user?.email?.trim().toLowerCase() !== admin) return { ok: false as const, message: "سجّلي الدخول بحساب المدير." };
     requireDatabaseTarget();
