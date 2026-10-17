@@ -137,6 +137,7 @@ export default function ArticlesDashboard({
 
         </header>
 
+        <Link href="/admin/quick" className="mb-5 inline-block rounded-xl bg-amber-600 px-6 py-3 text-lg font-bold text-white">إضافة خبر سريع</Link>
         <section aria-label="إضافة الأخبار" className="mb-6 grid gap-4 sm:grid-cols-2">
           <Link href="/admin/new" className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-amber-400">
             <h2 className="text-xl font-bold">إضافة خبر يدويًا</h2>
