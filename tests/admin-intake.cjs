@@ -50,7 +50,7 @@ test('form reports safe errors, keeps server authorization and preserves redirec
 test('manual form has RTL, attribution, upload, preview and separate draft/review controls',()=>{
  const Form=load('app/admin/ArticleForm.tsx',{
   react:{...React,useActionState:()=>[{error:''},()=>{},false]},'next/link':{__esModule:true,default:'a'},
-  './brief-actions':{prepareFactualBrief:()=>{}},'./editor-actions':{saveArticle:()=>{},translateArticle:()=>{}},'./image-actions':{uploadArticleImage:()=>{}},
+  './assistant-actions':{prepareEditorText:()=>{}},'./brief-actions':{prepareFactualBrief:()=>{}},'./editor-actions':{saveArticle:()=>{},translateArticle:()=>{}},'./image-actions':{uploadArticleImage:()=>{}},
  }).default;
  const html=renderToStaticMarkup(React.createElement(Form));
  for(const value of ['dir="rtl"','إضافة خبر يدويًا','name="sourceName"','name="sourceUrl"','type="file"','معاينة قبل النشر','value="draft"','value="review"'])assert.ok(html.includes(value),value);

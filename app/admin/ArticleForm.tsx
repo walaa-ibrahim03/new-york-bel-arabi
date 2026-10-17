@@ -6,8 +6,9 @@ import Link from "next/link";
 import { useActionState, useRef, useState, useTransition } from "react";
 import {
   saveArticle,
-  translateArticle,
 } from "./editor-actions";
+import { prepareEditorText } from "./assistant-actions";
+import { detectNewsLanguage, type EditorText, type EditorOperation } from "../../lib/editor-assistant";
 import { prepareFactualBrief } from "./brief-actions";
 import { newsMetadata, articlePath, focusKeywords } from "../../lib/news-seo";
 import { uploadArticleImage } from "./image-actions";
@@ -35,6 +36,7 @@ export default function ArticleForm({
   article?: ArticleData;
 }) {
   const isEditing = Boolean(article);
+  const hasOriginal = Boolean(article?.originalTitle || article?.originalSummary || article?.originalContent);
 
   const [title, setTitle] = useState(article?.title ?? "");
   const [summary, setSummary] = useState(article?.summary ?? "");
@@ -80,50 +82,59 @@ export default function ArticleForm({
   const [factsConfirmed, setFactsConfirmed] = useState(false);
   const seo = newsMetadata({ id: article?.id ?? 1, title, summary, category, imageUrl, publishedAt: null });
   function handleBrief() {
-    if (isTranslating || isSaving || isUploading) return;
-    if ((title || summary || content) && !window.confirm("استبدال الحقول بموجز من الوقائع؟ لن يتم الحفظ أو النشر.")) return;
-    setError(""); setMessage("");
+    if (assistantBusy.current || isTranslating || isSaving || isUploading) return;
+    const key = JSON.stringify({ facts, sourceName, sourceUrl, confirmed: factsConfirmed });
+    const original = { title: facts.split("\n")[0].slice(0, 180), summary: "", content: facts };
+    setError(""); setMessage(""); setPreview(null);
+    if (lastAssistant.current?.key === key) {
+      setAssistantPreview({ ...lastAssistant.current.draft }); setPreviewOriginal(original);
+      setMessage("أُعيدت المعاينة السابقة دون استدعاء مدفوع جديد."); return;
+    }
+    assistantBusy.current = true;
     startTranslation(async () => {
       try {
         const result = await prepareFactualBrief({ facts, sourceName, sourceUrl, confirmed: factsConfirmed });
         if (!result.ok) { setError(result.message); return; }
-        setTitle(result.draft.title); setSummary(result.draft.summary); setContent(result.draft.content); setPreview(null);
-        setMessage("أُعد الموجز ونُسب إلى المصدر. راجعي الأسماء والأرقام والتوقيت قبل الحفظ والمراجعة.");
+        lastAssistant.current = { key, draft: result.draft };
+        setAssistantPreview({ ...result.draft }); setPreviewOriginal(original);
       } catch { setError("تعذر إعداد الموجز؛ لم يتم الحفظ أو النشر."); }
+      finally { assistantBusy.current = false; }
     });
   }
 
-  function handleTranslate() {
-    if (!article || isTranslating) return;
-
-    const confirmed = window.confirm(
-      "سيتم استبدال العنوان والملخص والمحتوى الموجودين في الحقول بمسودة عربية. هل تريدين المتابعة؟"
-    );
-
-    if (!confirmed) return;
-
-    setMessage("");
-    setError("");
-
+  const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const [assistantPreview, setAssistantPreview] = useState<EditorText | null>(null);
+  const [pendingOriginal, setPendingOriginal] = useState("");
+  const [previewOriginal, setPreviewOriginal] = useState<EditorText | null>(null);
+  const assistantBusy = useRef(false);
+  const lastAssistant = useRef<{ key: string; draft: EditorText } | null>(null);
+  const language = detectNewsLanguage(`${title} ${summary} ${content}`);
+  const [seoPreview, setSeoPreview] = useState<{ title: string; description: string; keywords: string[] } | null>(null);
+  function handleAssistant(operation: EditorOperation) {
+    if (assistantBusy.current || isTranslating || isSaving || isUploading) return;
+    const text = { title, summary, content };
+    const key = JSON.stringify({ text, operation, sourceUrl, rightsConfirmed, id: article?.id, revision: article?.revision });
+    setMessage(""); setError(""); setPreview(null);
+    if (lastAssistant.current?.key === key) {
+      setAssistantPreview({ ...lastAssistant.current.draft }); setPreviewOriginal(text);
+      setMessage("أُعيدت المعاينة السابقة دون استدعاء مدفوع جديد."); return;
+    }
+    assistantBusy.current = true;
     startTranslation(async () => {
       try {
-        const result = await translateArticle(article.id);
-
-        setTitle(result.title);
-        setSummary(result.summary);
-        setContent(result.content);
-
-        setMessage(
-          "تم إعداد المسودة العربية. راجعي المعلومات قبل الحفظ."
-        );
-      } catch (err) {
-        void err;
-
-        setError(
-          "تعذّر إعداد الترجمة. تأكدي من وجود الأصل وأن الخبر مسودة."
-        );
-      }
+        const result = await prepareEditorText({ text, operation, sourceUrl, rightsConfirmed, id: article?.id, revision: article?.revision });
+        if (!result.ok) { setError(result.message); return; }
+        lastAssistant.current = { key, draft: result.draft };
+        setAssistantPreview({ ...result.draft }); setPreviewOriginal(text);
+      } catch { setError("تعذر إعداد المعاينة. لم يتغير النص أو يُحفظ شيء."); }
+      finally { assistantBusy.current = false; }
     });
+  }
+  function acceptAssistant() {
+    if (!assistantPreview || !previewOriginal) return;
+    if (!hasOriginal && !pendingOriginal) setPendingOriginal(JSON.stringify({ ...previewOriginal, sourceUrl: sourceUrl.trim() }));
+    setTitle(assistantPreview.title); setSummary(assistantPreview.summary); setContent(assistantPreview.content);
+    setAssistantPreview(null); setPreview(null); setMessage("نُقلت النتيجة إلى الحقول القابلة للتعديل. الأصل محفوظ في هذه الجلسة وسيُحفظ منفصلًا عند الحفظ الصريح فقط.");
   }
 
   return (
@@ -149,41 +160,32 @@ export default function ArticleForm({
             : "أدخلي معلومات الخبر. سيتم حفظه كمسودة."}
         </p>
 
-        {article && (
-          <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-            <h2 className="text-lg font-bold">
-              إعداد مسودة عربية بالذكاء الاصطناعي
-            </h2>
-
-            <p className="mt-2 text-sm text-zinc-600">
-              سيُنشئ الذكاء الاصطناعي مسودة عربية من معلومات
-              الخبر المتاحة. يجب مراجعتها قبل الحفظ والنشر.
-            </p>
-
-            <button
-              type="button"
-              onClick={handleTranslate}
-              disabled={isTranslating || isSaving || isUploading || !article.originalTitle}
-              className="mt-4 rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
-            >
-              {isTranslating
-                ? "جارٍ إعداد الترجمة..."
-                : "ترجمة الخبر بالذكاء الاصطناعي"}
-            </button>
-
-            {message && (
-              <p role="status" className="mt-3 text-sm text-green-800">
-                {message}
-              </p>
-            )}
-
-            {error && (
-              <p role="alert" className="mt-3 text-sm text-red-700">
-                {error}
-              </p>
-            )}
-          </section>
-        )}
+        <section className="mt-6 space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5" aria-label="مساعد تحرير الأخبار">
+          <h2 className="text-lg font-bold">مساعد تحرير الأخبار</h2>
+          <p className="text-sm">{language === "en" ? "النص يبدو إنجليزيًا؛ نقترح الترجمة إلى العربية." : language === "ar" ? "النص يبدو عربيًا؛ نقترح التلخيص والتبسيط." : "النص مختلط أو غير كافٍ؛ اختاري العملية يدويًا."} الاقتراح لا يشغّل الذكاء الاصطناعي تلقائيًا.</p>
+          <label className="flex items-start gap-2 text-sm leading-7"><input type="checkbox" disabled={isTranslating} checked={rightsConfirmed} onChange={e => setRightsConfirmed(e.target.checked)} />النص من كتابتي أو لدي إذن يسمح بترجمته أو تلخيصه. للنصوص المحمية استخدمي موجز الوقائع أدناه.</label>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={() => handleAssistant("translate")} disabled={!rightsConfirmed || isTranslating || isSaving || isUploading} className="rounded-xl bg-amber-400 px-4 py-3 font-bold disabled:opacity-50">ترجمة إلى العربية</button>
+            <button type="button" onClick={() => handleAssistant("simplify")} disabled={!rightsConfirmed || isTranslating || isSaving || isUploading} className="rounded-xl bg-zinc-900 px-4 py-3 font-bold text-white disabled:opacity-50">تلخيص وتبسيط بالذكاء الاصطناعي</button>
+            <button type="button" disabled={!title.trim() || !summary.trim() || isTranslating || isSaving} onClick={() => setSeoPreview({ title: title.trim().replace(/\s+/g, " ").slice(0, 75), description: summary.trim().replace(/\s+/g, " ").slice(0, 160), keywords: focusKeywords(title, category) })} className="rounded-xl border border-zinc-400 px-4 py-3 font-bold disabled:opacity-50">تحسين SEO</button>
+          </div>
+          <p className="text-xs leading-6">النص حتى 8000 حرف. الترجمة أو التبسيط: استدعاء واحد عند الضغط، مثال تقديري 0.0115 دولار للعملية عند 2000 رمز إدخال و900 إخراج بتعرفة gpt-5.1؛ يتغير حسب النموذج والحجم. تحسين SEO محلي بلا تكلفة API. لا حفظ أو نشر تلقائي.</p>
+          {isTranslating && <p role="status">جارٍ إعداد المعاينة...</p>}
+          {assistantPreview && <section className="space-y-3 rounded-xl border bg-white p-4" aria-label="معاينة الذكاء الاصطناعي القابلة للتعديل">
+            <h3 className="font-bold">راجعي النتيجة وعدّليها قبل استخدامها</h3>
+            <input aria-label="عنوان المعاينة" value={assistantPreview.title} maxLength={180} className="input-style" onChange={e => setAssistantPreview({ ...assistantPreview, title: e.target.value })} />
+            <textarea aria-label="ملخص المعاينة" value={assistantPreview.summary} maxLength={500} className="input-style" onChange={e => setAssistantPreview({ ...assistantPreview, summary: e.target.value })} />
+            <textarea aria-label="محتوى المعاينة" value={assistantPreview.content} maxLength={20000} rows={7} className="input-style" onChange={e => setAssistantPreview({ ...assistantPreview, content: e.target.value })} />
+            <div className="flex flex-wrap gap-3"><button type="button" onClick={acceptAssistant} disabled={isTranslating || isSaving || isUploading} className="rounded-lg bg-green-800 px-4 py-2 text-white">استخدام النتيجة في الحقول</button><button type="button" onClick={() => setAssistantPreview(null)} className="rounded-lg border px-4 py-2">تجاهل النتيجة</button></div>
+          </section>}
+          {seoPreview && <section className="space-y-3 rounded-xl border bg-white p-4" aria-label="اقتراح SEO">
+            <label className="block">عنوان SEO<input className="input-style" maxLength={75} value={seoPreview.title} onChange={e => setSeoPreview({ ...seoPreview, title: e.target.value })} /></label>
+            <label className="block">وصف Meta<textarea className="input-style" maxLength={160} value={seoPreview.description} onChange={e => setSeoPreview({ ...seoPreview, description: e.target.value })} /></label>
+            <p>كلمات محورية: {focusKeywords(seoPreview.title, category).join("، ")}</p><p className="text-xs">تطبيق الاقتراح يعدّل عنوان الخبر وملخصه؛ بيانات SEO مشتقة منهما والكلمات من العنوان والقسم، وليست حقولًا مستقلة. راجعي عدم حذف اسم أو تاريخ مهم عند الاختصار.</p>
+            <button type="button" disabled={isTranslating || isSaving || isUploading} onClick={() => { setTitle(seoPreview.title); setSummary(seoPreview.description); setSeoPreview(null); setPreview(null); }} className="rounded-lg border px-4 py-2">استخدام اقتراح SEO</button>
+          </section>}
+          {message && <p role="status" className="text-green-800">{message}</p>}{error && <p role="alert" className="text-red-700">{error}</p>}
+        </section>
 
         <section className="mt-6 space-y-3 rounded-2xl border bg-white p-5" aria-label="إعداد موجز من الوقائع">
           <h2 className="font-bold">موجز عربي سريع من مصدر واحد</h2>
@@ -200,18 +202,20 @@ export default function ArticleForm({
           onChange={() => setPreview(null)}
           className="mt-8 space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
         >
+          <input type="hidden" name="pendingOriginal" value={pendingOriginal} />
           {article && <>
             <input type="hidden" name="id" value={article.id} />
             <input type="hidden" name="revision" value={article.revision} />
             <section className="rounded-xl bg-zinc-50 p-4">
               <h2 className="font-bold">النص الأصلي المحفوظ</h2>
-              {article.originalTitle ? <div dir="auto" className="whitespace-pre-wrap">
+              {hasOriginal ? <div dir="auto" className="whitespace-pre-wrap">
                 <h3>{article.originalTitle}</h3><p>{article.originalSummary}</p><p>{article.originalContent}</p>
               </div> : <p>لا يوجد أصل محفوظ لهذا الخبر القديم؛ راجعي رابط المصدر. لن نعتبر النص الحالي أصلًا إنجليزيًا.</p>}
               <p>حفظ التعديلات يعيد الخبر إلى المسودة ويلغي الاعتماد السابق.</p>
             </section>
           </>}
 
+          {pendingOriginal && <details className="rounded-xl bg-zinc-50 p-4"><summary>النص قبل أول معالجة — سيُحفظ منفصلًا</summary><p className="whitespace-pre-wrap" dir="auto">{(() => { const original = JSON.parse(pendingOriginal) as EditorText; return `${original.title}\n${original.summary}\n${original.content}`; })()}</p></details>}
           <Field label="عنوان الخبر">
             <input
               name="title"

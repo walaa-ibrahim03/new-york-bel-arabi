@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { translateNewsToArabic } from "../../lib/translate-news";
 import { requireFullTranslationPermission } from "../../lib/news-sources";
+import { readPendingOriginal } from "../../lib/editor-assistant";
 async function requireAdmin() {
   assertNewsOperationAllowed();
   const session = await auth();
@@ -97,6 +98,7 @@ export async function createArticle(formData: FormData) {
   await prisma.article.create({
     data: {
       ...data,
+      ...readPendingOriginal(formData.get("pendingOriginal"), data.sourceUrl),
       status: saveStatus(formData, data),
     },
   });
@@ -124,12 +126,13 @@ export async function updateArticle(formData: FormData) {
   if (!Number.isSafeInteger(revision) || revision < 0) throw new Error("Invalid revision");
   const existing = await prisma.article.findUnique({ where: { id } });
   if (!existing) throw new Error("Article not found");
-  if (existing.originalTitle && data.sourceUrl !== existing.sourceUrl) throw new Error("لا يمكن تغيير رابط المصدر المرتبط بالأصل المحفوظ. أنشئي مسودة مستقلة للمصدر الجديد.");
+  if ((existing.originalTitle || existing.originalSummary || existing.originalContent) && data.sourceUrl !== existing.sourceUrl) throw new Error("لا يمكن تغيير رابط المصدر المرتبط بالأصل المحفوظ. أنشئي مسودة مستقلة للمصدر الجديد.");
   if (!isKnownCategory(data.category) && data.category !== normalizeCategory(existing.category)) throw new Error("Invalid category");
   const result = await prisma.article.updateMany({
     where: { id, revision },
     data: {
       ...data,
+      ...(!existing.originalTitle && !existing.originalSummary && !existing.originalContent ? readPendingOriginal(formData.get("pendingOriginal"), data.sourceUrl) : {}),
       status: saveStatus(formData, data), publishedAt: null,
       reviewedAt: null, reviewedBy: null, approvedAt: null, approvedBy: null,
       revision: { increment: 1 },

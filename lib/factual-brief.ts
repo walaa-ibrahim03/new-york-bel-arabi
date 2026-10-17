@@ -11,10 +11,10 @@ export function attributeBrief<T extends { title: string; summary: string; conte
   const attribution = `بحسب ${sourceName}، `;
   return { ...draft, summary: (attribution + draft.summary).slice(0, 500), content: attribution + draft.content };
 }
-export function validateBriefNumbers(facts: string, draft: { title: string; summary: string; content: string }) {
+export function validateBriefNumbers(facts: string, draft: { title: string; summary: string; content: string }, limitWords = true) {
   const normalize = (s: string) => s.replace(/[٠-٩]/g, c => String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/[۰-۹]/g, c => String("۰۱۲۳۴۵۶۷۸۹".indexOf(c)));
   const numbers = (s: string) => normalize(s).match(/\d+(?:[.,]\d+)*/g) ?? [];
   const allowed = new Set(numbers(facts));
   if (numbers(`${draft.title} ${draft.summary} ${draft.content}`).some(n => !allowed.has(n))) throw new Error("المسودة تتضمن رقمًا غير وارد في الوقائع؛ تحتاج مراجعة.");
-  if (draft.content.split(/\s+/).length > 100) throw new Error("الموجز أطول من المطلوب.");
+  if (limitWords && draft.content.split(/\s+/).length > 100) throw new Error("الموجز أطول من المطلوب.");
 }
