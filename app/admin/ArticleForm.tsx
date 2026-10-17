@@ -11,9 +11,11 @@ import { prepareEditorText } from "./assistant-actions";
 import { detectNewsLanguage, type EditorText, type EditorOperation } from "../../lib/editor-assistant";
 import { newsMetadata, articlePath, focusKeywords } from "../../lib/news-seo";
 import { uploadArticleImage } from "./image-actions";
+import SocialKit from "./SocialKit";
 import ArticlePreview, { type PreviewArticle } from "./ArticlePreview";
 
 type ArticleData = {
+  status?: string;
   id: number;
   revision: number;
   originalTitle: string | null;
@@ -32,8 +34,10 @@ type ArticleData = {
 export default function ArticleForm({
   article,
   discoverySource,
+  siteOrigin = "",
 }: {
   article?: ArticleData;
+  siteOrigin?: string;
   discoverySource?: { name: string; url: string; title: string };
 }) {
   const isEditing = Boolean(article);
@@ -339,6 +343,7 @@ export default function ArticleForm({
           </div>
         </form>
         {preview && <ArticlePreview article={preview} />}
+        {article && <SocialKit article={article} origin={siteOrigin} published={article.status === "PUBLISHED"} />}
       </div>
     </main>
   );

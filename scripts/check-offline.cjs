@@ -4,7 +4,7 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const mode = process.argv[2] ?? 'test';
 const commands = {
-  test: ['--test', 'tests/phase-one.cjs', 'tests/preparation.cjs', 'tests/database-guard.cjs', 'tests/delete-article.cjs', 'tests/admin-intake.cjs', 'tests/news-launch.cjs', 'tests/editor-assistant.cjs'],
+  test: ['--test', 'tests/phase-one.cjs', 'tests/preparation.cjs', 'tests/database-guard.cjs', 'tests/delete-article.cjs', 'tests/admin-intake.cjs', 'tests/news-launch.cjs', 'tests/editor-assistant.cjs', 'tests/quick-publishing.cjs'],
   typecheck: ['node_modules/typescript/bin/tsc', '--noEmit'],
 };
 if (!Object.hasOwn(commands, mode)) {

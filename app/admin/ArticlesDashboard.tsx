@@ -2,7 +2,6 @@
 "use client";
 
 import { statusLabels } from "../../lib/article-policy";
-import { newsSources, isSourceApproved } from "../../lib/news-sources";
 import Link from "next/link";
 import SourceDiscovery from "./SourceDiscovery";
 import { useMemo, useState, useTransition } from "react";
@@ -10,7 +9,6 @@ import { useMemo, useState, useTransition } from "react";
 import {
   unpublishArticle,
   deleteArticle,
-  importNewsFromRSS,
 } from "./actions";
 
 type Article = {
@@ -28,9 +26,11 @@ type Filter = "ALL" | "DRAFT" | "IN_REVIEW" | "APPROVED" | "PUBLISHED";
 export default function ArticlesDashboard({
   articles,
   readOnly = true,
+  siteOrigin = "",
 }: {
   articles: Article[];
   readOnly?: boolean;
+  siteOrigin?: string;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -39,32 +39,6 @@ export default function ArticlesDashboard({
   const [error, setError] = useState("");
   const [deletedIds, setDeletedIds] = useState<number[]>([]);
   const [deleteFeedback, setDeleteFeedback] = useState<{ id: number; ok: boolean; message: string } | null>(null);
-const [importMessage, setImportMessage] = useState("");
-const [isImporting, setIsImporting] = useState(false);
-const [selectedSource, setSelectedSource] = useState(newsSources.find(isSourceApproved)?.id ?? "");
-const selectedSourceDetails = newsSources.find(source => source.id === selectedSource);
-const sourceApproved = Boolean(selectedSourceDetails && isSourceApproved(selectedSourceDetails));
-
-function handleImportRSS() {
-  if (isPending || isImporting || readOnly || !sourceApproved) return;
-
-  setError("");
-  setImportMessage("");
-  setIsImporting(true);
-
-  startTransition(async () => {
-    try {
-const result = await importNewsFromRSS(selectedSource);
-      setImportMessage(
-        `حُفظ ${result.imported} خبر كمسودة، وتُجاوز ${result.skipped} خبر مكرر أو غير صالح و${result.irrelevant} خبر خارج الأقسام المستهدفة. لا نشر تلقائي.`
-      );
-    } catch {
-      setError("فشل جلب الأخبار من RSS. حاولي مرة أخرى.");
-    } finally {
-      setIsImporting(false);
-    }
-  });
-}
   const visibleArticles = useMemo(() => articles.filter(article => !deletedIds.includes(article.id)), [articles, deletedIds]);
   const published = visibleArticles.filter(
     (a) => a.status === "PUBLISHED"
@@ -169,37 +143,11 @@ const result = await importNewsFromRSS(selectedSource);
             <p className="mt-2 text-sm leading-7 text-zinc-600">اكتبي الخبر وأضيفي المصدر والصورة، ثم عاينيه واحفظيه كمسودة أو انشريه بعد التأكيد.</p>
           </Link>
           <a href="#news-discovery" className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm transition hover:border-amber-400">
-            <h2 className="text-xl font-bold">اكتشاف الأخبار والمصادر</h2>
-            <p className="mt-2 text-sm leading-7 text-zinc-600">CNN وBBC والجزيرة وغيرها: متابعة رسمية، ثم إعداد خبر عربي من وقائع متاحة قانونيًا. الاستيراد النصي منفصل.</p>
+            <h2 className="text-xl font-bold">النشر السريع للأخبار</h2>
+            <p className="mt-2 text-sm leading-7 text-zinc-600">اختاري المصدر والقسم ثم العناوين المطلوبة لتجهيز مسودات عربية ومراجعتها ونشرها.</p>
           </a>
         </section>
-        <SourceDiscovery readOnly={readOnly} />
-        <section id="rss-import" aria-label="جلب الأخبار تلقائيًا" className="mb-8 space-y-4 rounded-2xl border border-zinc-200 bg-white p-5">
-          <h2 className="text-xl font-bold">جلب الأخبار تلقائيًا</h2>
-          <p className="text-sm leading-7 text-zinc-600">اختاري مصدرًا مرخّصًا ثم ابدئي الجلب. نستخدم النص المتاح في RSS فقط؛ لا نسحب المقال الكامل أو الصور، ولا ننشر أي خبر تلقائيًا.</p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-<select
-  value={selectedSource}
-  onChange={(e) => setSelectedSource(e.target.value)}
-  disabled={isPending || isImporting}
-  aria-label="اختيار مصدر الأخبار"
-  className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900"
->
-  {newsSources.map((source) => <option key={source.id} value={source.id} disabled={!isSourceApproved(source)}>{source.name}{!isSourceApproved(source) ? " — استيراد النص معطّل؛ متاح في دليل المتابعة" : " — استيراد معتمد"}</option>)}
-</select>
-
-          <button
-  type="button"
-  onClick={handleImportRSS}
-  disabled={isPending || isImporting || readOnly || !sourceApproved}
-  className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
->
-  {isImporting ? "جارٍ جلب الأخبار..." : "جلب الأخبار من RSS كمسودات"}
-</button>
-          </div>
-          {selectedSourceDetails && <a href={selectedSourceDetails.termsUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-sm text-amber-700 underline">شروط استخدام {selectedSourceDetails.name} ↗</a>}
-          {!sourceApproved && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm leading-7 text-amber-900">استيراد النص وترجمته آليًا غير معتمد لهذا المصدر. يمكنك متابعة المصدر الرسمي وإعداد خبر من الوقائع عبر قسم اكتشاف الأخبار أعلاه.</p>}
-        </section>
+        <SourceDiscovery readOnly={readOnly} origin={siteOrigin} />
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
           <StatCard label="إجمالي الأخبار" value={visibleArticles.length} />
@@ -240,14 +188,7 @@ const result = await importNewsFromRSS(selectedSource);
               </button>
             ))}
           </div>
-{importMessage && (
-  <p
-    role="status"
-    className="mb-4 rounded-lg bg-green-50 p-4 text-sm text-green-800"
-  >
-    {importMessage}
-  </p>
-)}
+
           {error && (
             <p
               role="alert"

@@ -3,6 +3,7 @@ import { auth } from "../../../../auth";
 import { prisma } from "../../../../lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import ArticleForm from "../../ArticleForm";
+import { siteOrigin } from "../../../../lib/news-seo";
 import { connection } from "next/server";
 export const instant = false;
 
@@ -38,6 +39,6 @@ export default async function EditArticlePage({
     notFound();
   }
 
-  return <ArticleForm article={article} />;
+  return <ArticleForm article={article} siteOrigin={siteOrigin() ?? ""} />;
 }
 

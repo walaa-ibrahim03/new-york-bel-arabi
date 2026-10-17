@@ -57,11 +57,11 @@ test('manual form has RTL, attribution, upload, preview and separate draft and c
  assert.equal(html.includes('value="PUBLISHED"'),false);
 });
 test('dashboard exposes both intake paths and keeps unapproved source import disabled',()=>{
- const Dashboard=load('app/admin/ArticlesDashboard.tsx',{'next/link':{__esModule:true,default:'a'},'./discovery-actions':{discoverNewsHeadlines:()=>{throw Error('No automatic discovery in render');}},'./actions':{}}).default;
+ const Dashboard=load('app/admin/ArticlesDashboard.tsx',{'next/link':{__esModule:true,default:'a'},'./quick-actions':{searchQuickNews:()=>{throw Error('No automatic discovery in render');}},'./actions':{}}).default;
  const html=renderToStaticMarkup(React.createElement(Dashboard,{articles:[],readOnly:false}));
- for(const value of ['إضافة خبر يدويًا','جلب الأخبار تلقائيًا','sm:grid-cols-2','href="/admin/new"','id="rss-import"','استيراد النص معطّل'])assert.ok(html.includes(value),value);
- assert.match(html,/<option[^>]*disabled=""[^>]*>Gothamist/);
- assert.match(html,/<option value="nasa-releases" selected="">/);
+ for(const value of ['إضافة خبر يدويًا','النشر السريع للأخبار','sm:grid-cols-2','href="/admin/new"','id="news-discovery"','مصدر الأخبار السريع'])assert.ok(html.includes(value),value);
+ assert.ok(html.includes("جلب أحدث 5 أخبار"));
+ assert.ok(html.includes("تجهيز الأخبار المختارة"));
 });
 test('known publisher translation is blocked when permission is missing; own synthetic original remains separate',async()=>environment({ADMIN_EMAIL:'admin@example.org',NYBA_NEWS_MODE:'read-write'},async()=>{
  let calls=0;const translate=async(title,summary,content)=>{calls++;assert.equal(title,'English original');assert.equal(summary,'Original summary');assert.equal(content,'Original content');return{title:'عنوان خيالي',summary:'ملخص',content:'محتوى'};};

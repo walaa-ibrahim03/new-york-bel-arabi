@@ -118,7 +118,7 @@ export async function createArticle(formData: FormData) {
   redirect("/admin");
 }
 
-export async function updateArticle(formData: FormData) {
+export async function updateArticle(formData: FormData, stayOnPage = false) {
   const admin = await requireAdmin();
 
   const id = Number(formData.get("id"));
@@ -156,7 +156,7 @@ export async function updateArticle(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/");
 
-  redirect("/admin");
+  if (!stayOnPage) redirect("/admin");
 }
 
 export async function saveArticle(_previous: { error: string }, formData: FormData): Promise<{ error: string }> {
