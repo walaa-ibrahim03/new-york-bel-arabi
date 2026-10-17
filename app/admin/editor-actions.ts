@@ -9,7 +9,7 @@ import { prisma } from "../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { translateNewsToArabic } from "../../lib/translate-news";
-import { newsSources, requireApprovedSource } from "../../lib/news-sources";
+import { requireFullTranslationPermission } from "../../lib/news-sources";
 async function requireAdmin() {
   assertNewsOperationAllowed();
   const session = await auth();
@@ -194,8 +194,7 @@ export async function translateArticle(articleId: number) {
   }
 
   if (!article.originalTitle) throw new Error("لا يتوفر أصل محفوظ لهذا الخبر القديم. راجعي المصدر يدويًا.");
-  const source = newsSources.find(item => new URL(item.feedUrl).hostname.replace(/^www\./, "") === new URL(article.sourceUrl).hostname.replace(/^www\./, ""));
-  if (source) requireApprovedSource(source.feedUrl);
+  requireFullTranslationPermission(article.sourceUrl);
 
   // إرسال الأصل المحفوظ فقط إلى OpenAI
   const translation = await translateNewsToArabic(

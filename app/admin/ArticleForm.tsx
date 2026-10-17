@@ -8,6 +8,8 @@ import {
   saveArticle,
   translateArticle,
 } from "./editor-actions";
+import { prepareFactualBrief } from "./brief-actions";
+import { newsMetadata, articlePath, focusKeywords } from "../../lib/news-seo";
 import { uploadArticleImage } from "./image-actions";
 import ArticlePreview, { type PreviewArticle } from "./ArticlePreview";
 
@@ -73,6 +75,23 @@ export default function ArticleForm({
   const [isTranslating, startTranslation] = useTransition();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const [facts, setFacts] = useState("");
+  const [factsConfirmed, setFactsConfirmed] = useState(false);
+  const seo = newsMetadata({ id: article?.id ?? 1, title, summary, category, imageUrl, publishedAt: null });
+  function handleBrief() {
+    if (isTranslating || isSaving || isUploading) return;
+    if ((title || summary || content) && !window.confirm("استبدال الحقول بموجز من الوقائع؟ لن يتم الحفظ أو النشر.")) return;
+    setError(""); setMessage("");
+    startTranslation(async () => {
+      try {
+        const result = await prepareFactualBrief({ facts, sourceName, sourceUrl, confirmed: factsConfirmed });
+        if (!result.ok) { setError(result.message); return; }
+        setTitle(result.draft.title); setSummary(result.draft.summary); setContent(result.draft.content); setPreview(null);
+        setMessage("أُعد الموجز ونُسب إلى المصدر. راجعي الأسماء والأرقام والتوقيت قبل الحفظ والمراجعة.");
+      } catch { setError("تعذر إعداد الموجز؛ لم يتم الحفظ أو النشر."); }
+    });
+  }
 
   function handleTranslate() {
     if (!article || isTranslating) return;
@@ -166,6 +185,15 @@ export default function ArticleForm({
           </section>
         )}
 
+        <section className="mt-6 space-y-3 rounded-2xl border bg-white p-5" aria-label="إعداد موجز من الوقائع">
+          <h2 className="font-bold">موجز عربي سريع من مصدر واحد</h2>
+          <p className="text-sm leading-7">املئي اسم المصدر ورابطه أدناه، ثم اكتبي الوقائع المؤكدة كنقاط بأسلوبك، دون لصق مقال محمي. يُنسب الموجز إلى المصدر ولا يُنشر تلقائيًا.</p>
+          <textarea aria-label="الوقائع المؤكدة" maxLength={2500} rows={4} value={facts} onChange={e => { setFacts(e.target.value); setFactsConfirmed(false); }} className="input-style" />
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={factsConfirmed} onChange={e => setFactsConfirmed(e.target.checked)} />راجعت هذه الوقائع في المصدر؛ لا أقدم شائعة كحقيقة أو نصًا محميًا لإعادة صياغته.</label>
+          <button type="button" disabled={!factsConfirmed || isTranslating || isSaving || isUploading} onClick={handleBrief} className="rounded-xl bg-amber-400 px-5 py-3 font-bold disabled:opacity-50">{isTranslating ? "جارٍ إعداد المسودة..." : "إعداد الموجز وSEO"}</button>
+          {message && <p role="status" className="text-green-800">{message}</p>}{error && <p role="alert" className="text-red-700">{error}</p>}
+        </section>
+
         <form
           ref={formRef}
           action={saveAction}
@@ -248,6 +276,8 @@ export default function ArticleForm({
                 className="input-style"
               >
                 <option value="نيويورك">نيويورك</option>
+                <option value="أمريكا">أمريكا</option>
+                <option value="العالم">العالم</option>
                 <option value="مانهاتن">مانهاتن</option>
                 <option value="بروكلين">بروكلين</option>
                 <option value="كوينز">كوينز</option>
@@ -302,6 +332,9 @@ export default function ArticleForm({
             {uploadError && <p role="alert" className="text-sm text-red-700">{uploadError}</p>}
           </section>
 
+          <section className="space-y-2 rounded-xl bg-slate-50 p-4" aria-label="معاينة SEO">
+            <h2 className="font-bold">SEO تلقائي</h2><p>العنوان: {String(seo.title ?? "")}</p><p>الوصف: {String(seo.description ?? "")}</p><p>الكلمات المحورية: {focusKeywords(title, category).join("، ")}</p><p dir="ltr" className="break-all">{articlePath({ id: article?.id ?? 1, title })}</p><p className="text-xs">{!article && "رقم الرابط توضيحي؛ يُستبدل برقم الخبر بعد الحفظ. "}تُولّد روابط Canonical وOpen Graph والبيانات المنظمة عند العرض. الكلمات المحورية تساعد التحرير ولا تضمن الترتيب.</p>
+          </section>
           <p className="text-sm leading-7 text-zinc-600">حفظ الخبر لا ينشره. الإرسال للمراجعة يحتاج اعتماد المدير قبل أن يصبح النشر متاحًا.</p>
           {saveState.error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{saveState.error}</p>}
 

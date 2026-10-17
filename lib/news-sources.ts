@@ -8,9 +8,16 @@ export type NewsSource = {
   category: (typeof categories)[number];
   termsUrl: string;
   permission: { automaticImport: boolean; translation: boolean; reference: string };
+  coverage?: "US" | "WORLD" | "NY";
 };
 
 export const newsSources: NewsSource[] = [
+  {
+    id: "nasa-releases", name: "NASA", feedUrl: "https://www.nasa.gov/news-release/feed/",
+    category: "أخبار أمريكا", coverage: "US",
+    termsUrl: "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+    permission: { automaticImport: true, translation: true, reference: "NASA official news releases: factual informational use with attribution; no imagery or third-party media. Reviewed 2026-10-17." },
+  },
   {
     id: "gothamist",
     name: "Gothamist",
@@ -47,4 +54,12 @@ export function requireApprovedSource(feedUrl: string) {
   const source = newsSources.find(item => item.feedUrl === feedUrl);
   if (!source || !isSourceApproved(source)) throw new Error("لم يُعتمد إذن استخدام هذا المصدر للاستيراد والترجمة بعد.");
   return source;
+}
+
+export function requireFullTranslationPermission(sourceUrl: string) {
+  const host = new URL(sourceUrl).hostname.replace(/^www\./, "");
+  const source = newsSources.find(item => new URL(item.feedUrl).hostname.replace(/^www\./, "") === host);
+  if (source) { requireApprovedSource(source.feedUrl); return; }
+  const publishers = ["cnn.com", "bbc.com", "bbc.co.uk", "aljazeera.net", "aljazeera.com", "reuters.com", "apnews.com", "ap.org", "alarabiya.net", "alarabiya.com"];
+  if (publishers.some(domain => host === domain || host.endsWith(`.${domain}`))) throw new Error("الترجمة الكاملة لهذا المصدر تحتاج إذنًا. استخدمي موجز الوقائع المؤكدة بدلًا منها.");
 }

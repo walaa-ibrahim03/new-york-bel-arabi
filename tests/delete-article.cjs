@@ -32,7 +32,7 @@ function fixture(t,{mode='read-write',email='admin@example.org',failure,cacheFai
 test('deletion removes only its fictional row and invalidates all public/admin paths',async t=>{
  const f=fixture(t);const result=await f.actions.deleteArticle(900001);
  assert.equal(result.ok,true);assert.equal(f.rows.has(900001),false);assert.equal(f.rows.has(900002),true);
- assert.equal(f.state.deleteCalls,1);assert.deepEqual(f.state.paths,['/admin','/admin/edit/900001','/news/900001','/','/sitemap.xml']);
+ assert.equal(f.state.deleteCalls,1);assert.deepEqual(f.state.paths,['/admin','/admin/edit/900001','/news/900001','/','/sitemap.xml','/news-sitemap.xml']);
  assert.equal((await f.actions.deleteArticle(900001)).code,'NOT_FOUND');
 });
 test('read-only deletion reports its cause without touching auth or Prisma',async t=>{

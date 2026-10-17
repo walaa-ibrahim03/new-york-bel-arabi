@@ -29,6 +29,7 @@ function refreshArticle(id: number) {
   revalidatePath(`/news/${id}`);
   revalidatePath("/");
   revalidatePath("/sitemap.xml");
+  revalidatePath("/news-sitemap.xml");
 }
 
 async function transitionArticle(id: number, from: string, to: string) {
@@ -60,6 +61,11 @@ export async function approveArticle(id: number) {
   await transitionArticle(id, "IN_REVIEW", "APPROVED");
 }
 export async function publishArticle(id: number) {
+  await transitionArticle(id, "APPROVED", "PUBLISHED");
+}
+export async function approveAndPublishArticle(id: number) {
+  // Explicit admin review shortcut; draft -> published remains forbidden.
+  await transitionArticle(id, "IN_REVIEW", "APPROVED");
   await transitionArticle(id, "APPROVED", "PUBLISHED");
 }
 export async function unpublishArticle(id: number) {

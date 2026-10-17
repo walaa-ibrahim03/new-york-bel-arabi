@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "../lib/prisma";
+import { articlePath, siteOrigin } from "../lib/news-seo";
 import { connection } from "next/server";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   await connection();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const siteUrl = siteOrigin();
 
   if (!siteUrl) {
     return [];
@@ -19,6 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     select: {
       id: true,
+      title: true,
       publishedAt: true,
       createdAt: true,
     },
@@ -30,8 +32,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 1,
     },
+    { url: `${baseUrl}/about`, changeFrequency: "monthly", priority: 0.4 },
     ...articles.map((article) => ({
-      url: `${baseUrl}/news/${article.id}`,
+      url: `${baseUrl}${articlePath(article)}`,
       lastModified: article.publishedAt ?? article.createdAt,
       changeFrequency: "weekly" as const,
       priority: 0.8,

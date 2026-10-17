@@ -1,9 +1,10 @@
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { connection } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import type { Metadata } from "next";
+import { articleId as parseArticleId, articlePath, newsMetadata, newsSchema, safeJsonLd } from "../../../lib/news-seo";
 export const instant = false;
 export async function generateMetadata({
   params,
@@ -11,9 +12,9 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const articleId = Number(id);
+  const articleId = parseArticleId(id);
 
-  if (!Number.isSafeInteger(articleId) || articleId <= 0) {
+  if (!articleId) {
     return {
       title: "الخبر غير موجود | نيويورك بالعربي",
       robots: { index: false, follow: false },
@@ -26,8 +27,7 @@ export async function generateMetadata({
       status: "PUBLISHED",
     },
     select: {
-      title: true,
-      summary: true,
+      id: true, title: true, summary: true, category: true, imageUrl: true, publishedAt: true,
     },
   });
 
@@ -38,15 +38,7 @@ export async function generateMetadata({
     };
   }
 
-  return {
-    title: `${article.title} | نيويورك بالعربي`,
-    description: article.summary,
-    openGraph: {
-      title: article.title,
-      description: article.summary,
-      type: "article",
-    },
-  };
+  return newsMetadata(article);
 }
 
 type PageProps = {
@@ -57,11 +49,10 @@ export default async function ArticlePage({ params }: PageProps) {
   await connection();
 
   const { id } = await params;
-  const articleId = Number(id);
+  const articleId = parseArticleId(id);
 
   if (
-    !Number.isSafeInteger(articleId) ||
-    articleId <= 0
+    !articleId
   ) {
     notFound();
   }
@@ -76,6 +67,9 @@ export default async function ArticlePage({ params }: PageProps) {
   if (!article) {
     notFound();
   }
+
+  if (`/news/${id}` !== articlePath(article)) permanentRedirect(articlePath(article));
+  const related = await prisma.article.findMany({ where: { status: "PUBLISHED", id: { not: article.id }, category: article.category }, orderBy: { publishedAt: "desc" }, take: 4, select: { id: true, title: true } });
 
   const paragraphs = article.content
     .split(/\n\s*\n/)
@@ -94,6 +88,7 @@ export default async function ArticlePage({ params }: PageProps) {
           ← العودة إلى الرئيسية
         </Link>
 
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(newsSchema(article)) }} />
         <article className="mt-8 overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
           <div className="p-6 sm:p-10">
             <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -137,7 +132,8 @@ export default async function ArticlePage({ params }: PageProps) {
               <img
                 src={article.imageUrl}
                 alt={article.title}
-                className="max-h-[480px] w-full object-cover"
+                width={1200} height={675} decoding="async"
+                className="aspect-video max-h-[480px] w-full object-cover"
               />
             </div>
           )}
@@ -167,6 +163,7 @@ export default async function ArticlePage({ params }: PageProps) {
             </div>
           </div>
         </article>
+        {related.length > 0 && <nav aria-label="أخبار ذات صلة" className="mt-8 rounded-2xl bg-white p-6"><h2 className="font-bold">أخبار ذات صلة</h2><ul>{related.map(item => <li key={item.id} className="mt-3"><Link className="text-amber-800 underline" href={articlePath(item)}>{item.title}</Link></li>)}</ul></nav>}
 
         <div className="mt-8">
           <Link

@@ -1,6 +1,8 @@
 
 import Link from "next/link";
 import { connection } from "next/server";
+import { articlePath } from "../lib/news-seo";
+import { trendingNews } from "../lib/news-trends";
 import { normalizeCategory } from "../lib/categories";
 import { prisma } from "../lib/prisma";
 
@@ -35,6 +37,9 @@ const sections = [
     categories: ["تعليم", "المدارس والعائلة"],
     symbol: "✳",
   },
+  { id: "us", title: "أخبار أمريكا", description: "الأحداث والسياسات والخدمات في الولايات المتحدة", categories: ["أخبار أمريكا"], symbol: "◉" },
+  { id: "world", title: "أخبار العالم", description: "تغطية عربية موجزة للأحداث العالمية", categories: ["أخبار العالم"], symbol: "◎" },
+  { id: "trending", title: "ترند", description: "موضوعات الساعة التي يختارها المحرر", categories: ["ترند"], symbol: "↗" },
 ];
 
 type NewsItem = {
@@ -56,9 +61,9 @@ function ArticleCard({ article }: { article: NewsItem }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={article.imageUrl}
-            alt=""
+            alt={article.title}
             className="h-full w-full object-cover"
-            loading="lazy"
+            loading="lazy" width={640} height={360} decoding="async"
           />
         </div>
       ) : (
@@ -78,7 +83,7 @@ function ArticleCard({ article }: { article: NewsItem }) {
         </div>
 
         <h3 className="text-lg font-bold leading-8 transition-colors group-hover:text-amber-700">
-          <Link href={`/news/${article.id}`} dir="auto">
+          <Link href={articlePath(article)} dir="auto">
             {article.title}
           </Link>
         </h3>
@@ -93,7 +98,7 @@ function ArticleCard({ article }: { article: NewsItem }) {
         )}
 
         <Link
-          href={`/news/${article.id}`}
+          href={articlePath(article)}
           className="mt-5 inline-block text-sm font-bold text-amber-700 hover:underline"
         >
           اقرأ الخبر ←
@@ -109,6 +114,7 @@ export default async function Home() {
     where: {
       status: "PUBLISHED",
     },
+    take: 200,
     orderBy: [
       { publishedAt: "desc" },
       { createdAt: "desc" },
@@ -124,12 +130,14 @@ export default async function Home() {
     },
   });
 
-  const priorityCategories = sections.flatMap(
+  const trendItems = trendingNews(articles);
+  const latestPublished = articles.find(a => a.publishedAt)?.publishedAt;
+  const priorityCategories = sections.filter(section => !["us", "world", "trending"].includes(section.id)).flatMap(
     (section) => section.categories
   );
 
   const featured =
-    articles.find((article) =>
+    articles.find(article => article.borough === "نيويورك") ?? articles.find((article) =>
       priorityCategories.includes(normalizeCategory(article.category))
     ) ?? articles[0];
 
@@ -221,7 +229,7 @@ export default async function Home() {
                 </p>
 
                 <Link
-                  href={`/news/${featured.id}`}
+                  href={articlePath(featured)}
                   className="mt-7 w-fit rounded-xl bg-amber-400 px-6 py-3 text-sm font-bold text-black hover:bg-amber-300"
                 >
                   اقرأ التفاصيل ←
@@ -281,6 +289,12 @@ export default async function Home() {
           </aside>
         </section>
 
+        <section aria-label="الأكثر تداولًا الآن" className="my-8 rounded-3xl border border-slate-200 bg-white p-6">
+          <h2 className="text-2xl font-black">الأكثر تداولًا الآن</h2>
+          <p className="mt-2 text-sm leading-7 text-slate-600">ترتيب محلي بحسب تكرار الموضوعات في أخبارنا المنشورة خلال 24 ساعة، مع اختيارات المحرر في قسم ترند؛ ليس قياسًا لتداول الشبكات العالمية.</p>
+          {latestPublished && <p className="mt-2 text-xs text-slate-500">آخر تحديث للأخبار: <time dateTime={latestPublished.toISOString()}>{latestPublished.toLocaleString("ar", { timeZone: "America/New_York" })}</time></p>}
+          {trendItems.length ? <ul className="mt-4 grid gap-3 sm:grid-cols-2">{trendItems.map(({ article, mentions }) => <li key={article.id}><Link className="font-bold text-amber-800 underline" href={articlePath(article)}>{article.title}</Link><p className="text-xs text-slate-500">{mentions > 1 ? `${mentions} تغطيات لدينا` : "اختيار المحرر"}</p></li>)}</ul> : <p className="mt-4 text-sm">لا توجد إشارات تداول كافية حاليًا. تابعي أحدث الأخبار أدناه.</p>}
+        </section>
         {/* Quick topic tiles */}
         <section
           aria-label="أقسام الموقع"
@@ -387,7 +401,7 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="bg-slate-950 text-white">
+      <footer className="bg-slate-950 text-white"><div className="mx-auto max-w-7xl px-5 pt-6"><Link className="underline" href="/about">عن الموقع والسياسة التحريرية</Link></div>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-9 sm:px-8">
           <div>
             <p className="text-xl font-black">

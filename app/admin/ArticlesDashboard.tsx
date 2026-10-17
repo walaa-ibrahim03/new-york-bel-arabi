@@ -11,6 +11,7 @@ import {
   approveArticle,
   returnArticleToDraft,
   publishArticle,
+  approveAndPublishArticle,
   unpublishArticle,
   deleteArticle,
   importNewsFromRSS,
@@ -150,6 +151,7 @@ const result = await importNewsFromRSS(selectedSource);
     >
       <div className="mx-auto max-w-6xl">
         {readOnly && <p role="status" className="mb-5 rounded-lg bg-amber-50 p-4 text-amber-900">هذه النسخة تعمل بوضع القراءة فقط؛ الحذف والتحرير والاستيراد متوقفة مؤقتًا لحماية البيانات.</p>}
+        <p className="mb-4"><Link href="/admin/sources" className="font-bold text-amber-800 underline">دليل المصادر والمتابعة والجدولة ←</Link></p>
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="mb-2 text-sm font-semibold text-amber-600">
@@ -325,6 +327,7 @@ const result = await importNewsFromRSS(selectedSource);
 
                     {article.status === "DRAFT" && <button type="button" disabled={isPending} onClick={() => runAction(article.id, submitArticleForReview)} className="rounded-lg border px-4 py-2">إرسال للمراجعة</button>}
                     {article.status === "IN_REVIEW" && <button type="button" disabled={isPending} onClick={() => runAction(article.id, approveArticle)} className="rounded-lg border px-4 py-2">اعتماد الخبر بعد المراجعة</button>}
+                    {article.status === "IN_REVIEW" && <button type="button" disabled={isPending || readOnly} onClick={() => { if (window.confirm("أؤكد أنني راجعت الوقائع ونسب المصدر وحقوق المحتوى. اعتماد الخبر ونشره الآن؟")) runAction(article.id, approveAndPublishArticle); }} className="rounded-lg bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">اعتماد ونشر الآن</button>}
                     {["IN_REVIEW", "APPROVED"].includes(article.status) && <button type="button" disabled={isPending} onClick={() => runAction(article.id, returnArticleToDraft)} className="rounded-lg border px-4 py-2">إعادة إلى المسودة</button>}
                     {article.status === "APPROVED" && (
                       <button
@@ -337,7 +340,7 @@ const result = await importNewsFromRSS(selectedSource);
                       >
                         {isPending && busyId === article.id
                           ? "جارٍ التنفيذ..."
-                          : "نشر الخبر"}
+                          : "نشر الآن"}
                       </button>
                     )}
 

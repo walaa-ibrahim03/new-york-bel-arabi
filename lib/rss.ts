@@ -1,4 +1,4 @@
-import { assertNewsOperationAllowed } from "./database-guard";
+import { assertNewsOperationAllowed, requireDatabaseTarget } from "./database-guard";
 
 import Parser from "rss-parser";
 
@@ -8,6 +8,7 @@ const parser = new Parser({ timeout: 15000, maxRedirects: 0 });
 export async function fetchRSS(feedUrl: string) {
   assertNewsOperationAllowed();
   requireApprovedSource(feedUrl);
+  requireDatabaseTarget();
   const feed = await parser.parseURL(feedUrl);
 
   return feed.items.map((item) => ({

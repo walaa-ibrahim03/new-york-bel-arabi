@@ -11,6 +11,7 @@ type ImportRSSOptions = {
   sourceName?: string;
   category?: string;
   limit?: number;
+  store?: Pick<typeof prisma, "article">;
 };
 
 const topicRules = [
@@ -113,13 +114,14 @@ export async function importRSS({
   feedUrl,
   sourceName = "مصدر غير معروف",
   limit = 5,
+  store = prisma,
 }: ImportRSSOptions) {
   assertNewsOperationAllowed();
   const source = requireApprovedSource(feedUrl);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 40) throw new Error("Invalid import limit");
   const articles = await fetchRSS(feedUrl);
   // Match old tracking URLs too, without changing any existing record.
-  const existing = await prisma.article.findMany({ select: { sourceUrl: true } });
+  const existing = await store.article.findMany({ select: { sourceUrl: true } });
   const seen = new Set(existing.flatMap(item => { try { return [normalizeImportedUrl(item.sourceUrl)]; } catch { return []; } }));
 
   let imported = 0;
@@ -155,13 +157,13 @@ export async function importRSS({
       article.summary
     );
 
-    if (!detectedCategory) {
+    if (!detectedCategory && !source.coverage) {
       irrelevant++;
       continue;
     }
 
     try {
-      await prisma.article.create({
+      await store.article.create({
         data: {
           title: article.title,
           content: article.summary || article.title,
@@ -172,8 +174,8 @@ export async function importRSS({
           sourceUrl,
           sourceName: source.name,
           status: "DRAFT",
-          category: normalizeCategory(detectedCategory),
-          borough: "نيويورك",
+          category: normalizeCategory(detectedCategory ?? source.category),
+          borough: source.coverage === "WORLD" ? "العالم" : source.coverage === "US" ? "أمريكا" : "نيويورك",
         },
       });
 
@@ -186,6 +188,9 @@ export async function importRSS({
         "code" in error &&
         error.code === "P2002"
       ) {
+        // A unique violation aborts a PostgreSQL transaction; let the scheduled
+        // caller roll back rather than report imports that were not committed.
+        if (store !== prisma) throw error;
         skipped++;
       } else {
         throw error;

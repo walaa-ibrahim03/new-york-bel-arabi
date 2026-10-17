@@ -50,7 +50,7 @@ test('form reports safe errors, keeps server authorization and preserves redirec
 test('manual form has RTL, attribution, upload, preview and separate draft/review controls',()=>{
  const Form=load('app/admin/ArticleForm.tsx',{
   react:{...React,useActionState:()=>[{error:''},()=>{},false]},'next/link':{__esModule:true,default:'a'},
-  './editor-actions':{saveArticle:()=>{},translateArticle:()=>{}},'./image-actions':{uploadArticleImage:()=>{}},
+  './brief-actions':{prepareFactualBrief:()=>{}},'./editor-actions':{saveArticle:()=>{},translateArticle:()=>{}},'./image-actions':{uploadArticleImage:()=>{}},
  }).default;
  const html=renderToStaticMarkup(React.createElement(Form));
  for(const value of ['dir="rtl"','إضافة خبر يدويًا','name="sourceName"','name="sourceUrl"','type="file"','معاينة قبل النشر','value="draft"','value="review"'])assert.ok(html.includes(value),value);
@@ -95,10 +95,10 @@ test('upload requires writable admin, verified guard and configured storage; iso
  await environment(storageEnv,async()=>{const u=uploader();const result=await u.api.uploadArticleImage(data);assert.equal(result.ok,true);assert.equal(u.calls.put,1);assert.equal('token' in result,false);});
 });
 test('RSS permission gate denies known but unlicensed feeds before any network access',async()=>{
- const policy=load('lib/news-sources.ts');assert.ok(policy.newsSources.every(source=>!policy.isSourceApproved(source)));
- for(const source of policy.newsSources)assert.throws(()=>policy.requireApprovedSource(source.feedUrl));
+ const policy=load('lib/news-sources.ts');assert.ok(policy.newsSources.filter(source=>source.id!=='nasa-releases').every(source=>!policy.isSourceApproved(source)));assert.ok(policy.isSourceApproved(policy.newsSources.find(source=>source.id==='nasa-releases')));
+ for(const source of policy.newsSources.filter(source=>source.id!=='nasa-releases'))assert.throws(()=>policy.requireApprovedSource(source.feedUrl));
  let touched=0;const importer=load('lib/import-rss.ts',{'./prisma':{prisma:{}},'./rss':{fetchRSS:async()=>{touched++;return[];}}});
- await assert.rejects(importer.importRSS({feedUrl:policy.newsSources[0].feedUrl}));assert.equal(touched,0);
+ await assert.rejects(importer.importRSS({feedUrl:policy.newsSources.find(source=>source.id==='gothamist').feedUrl}));assert.equal(touched,0);
 });
 test('RSS reuses classification, removes tracking duplicates, rejects cross-source links and stores attribution/original as draft',async()=>{
  const created=[],existing=[{sourceUrl:'https://example.org/old?utm_source=legacy#part'}];
