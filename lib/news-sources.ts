@@ -33,7 +33,7 @@ export const newsSources: NewsSource[] = [
   },
   {
     discovery: { automatic: true, reference: "Publisher-offered RSS linked on the official homepage; thecity.nyc redirects to thecityreporter.nyc, same City Report, Inc. Private headline/link/date discovery only; no article snippets, images or translation rights. Reviewed 2026-10-17; see docs/news-discovery-ar.md." },
-    discoveryStatus: "THE CITY / The City Reporter: اكتشاف العناوين والروابط والتواريخ متاح. لا نستورد مقتطف المقال أو نترجمه؛ أضيفي وقائع قصيرة للخبر المختار لتجهيز مسودته.",
+    discoveryStatus: "THE CITY / The City Reporter: اكتشاف العناوين والروابط والتواريخ متاح. نجهز موجزًا أصليًا من الوقائع الصريحة في العنوان؛ قد يكون قصيرًا. لا نجلب نص المقال أو نترجمه، والتفاصيل الإضافية عند الحاجة فقط.",
     directoryUrl: "https://www.thecity.nyc/",
     coverage: "NY",
     id: "the-city",

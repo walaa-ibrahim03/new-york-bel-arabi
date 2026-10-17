@@ -48,3 +48,11 @@ export function readQuickCandidate(token: string): QuickCandidate {
   if (!Number.isFinite(candidate.expires) || candidate.expires < Date.now()) throw new Error("انتهت صلاحية النتائج؛ أعيدي الجلب.");
   return candidate;
 }
+
+// Titles are metadata, not permission to fetch/translate the article behind them.
+// Ambiguous questions and generic teasers need a permitted excerpt or optional facts.
+export function headlineSupportsBrief(title: string) {
+  const text = title.trim();
+  return text.length >= 30 && text.split(/\s+/).length >= 5 && !/[?؟]/.test(text) &&
+    !/^(?:what|why|how|who|when|where|opinion|analysis|explained|everything you need|live updates)\b/i.test(text) && !/^(?:ماذا|لماذا|كيف|متى|أين|رأي|تحليل)(?:\s|$)/.test(text);
+}
