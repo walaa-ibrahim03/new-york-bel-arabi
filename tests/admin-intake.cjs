@@ -31,7 +31,7 @@ function editor({authorized=true,fail,redirect=()=>{},sourceUrl='https://example
 }
 test('manual intake stores attribution and draft/review only; cannot request published state',async()=>environment({ADMIN_EMAIL:'admin@example.org',NYBA_NEWS_MODE:'read-write'},async()=>{
  const e=editor();await e.api.createArticle(form());assert.equal(e.writes[0].data.status,'DRAFT');assert.equal(e.writes[0].data.sourceName,'مصدر اختباري');
- await e.api.createArticle(form('review'));assert.equal(e.writes[1].data.status,'IN_REVIEW');assert.equal('approvedBy' in e.writes[1].data,false);
+ await e.api.createArticle(form('review'));assert.equal(e.writes[1].data.status,'IN_REVIEW');assert.equal(e.writes[1].data.approvedBy,null);
  await assert.rejects(e.api.createArticle(form('PUBLISHED')));assert.equal(e.writes.length,2);
  const missing=form();missing.delete('sourceName');await assert.rejects(e.api.createArticle(missing));assert.equal(e.writes.length,2);
 }));
@@ -47,13 +47,13 @@ test('form reports safe errors, keeps server authorization and preserves redirec
  });
  await environment({ADMIN_EMAIL:'admin@example.org',NYBA_NEWS_MODE:'read-only'},async()=>{const e=editor();assert.match((await e.api.saveArticle({error:''},form())).error,/القراءة فقط/);assert.equal(e.writes.length,0);});
 });
-test('manual form has RTL, attribution, upload, preview and separate draft/review controls',()=>{
+test('manual form has RTL, attribution, upload, preview and separate draft and confirmed publish controls',()=>{
  const Form=load('app/admin/ArticleForm.tsx',{
   react:{...React,useActionState:()=>[{error:''},()=>{},false]},'next/link':{__esModule:true,default:'a'},
   './assistant-actions':{prepareEditorText:()=>{}},'./brief-actions':{prepareFactualBrief:()=>{}},'./editor-actions':{saveArticle:()=>{},translateArticle:()=>{}},'./image-actions':{uploadArticleImage:()=>{}},
  }).default;
  const html=renderToStaticMarkup(React.createElement(Form));
- for(const value of ['dir="rtl"','إضافة خبر يدويًا','name="sourceName"','name="sourceUrl"','type="file"','معاينة قبل النشر','value="draft"','value="review"'])assert.ok(html.includes(value),value);
+ for(const value of ['dir="rtl"','إضافة خبر يدويًا','name="sourceName"','name="sourceUrl"','type="file"','معاينة قبل النشر','value="draft"','value="publish"'])assert.ok(html.includes(value),value);
  assert.equal(html.includes('value="PUBLISHED"'),false);
 });
 test('dashboard exposes both intake paths and keeps unapproved source import disabled',()=>{

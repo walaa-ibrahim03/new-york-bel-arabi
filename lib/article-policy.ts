@@ -27,7 +27,7 @@ export function normalizeImportedUrl(value: string): string {
   return url.href;
 }
 export function validateEditorialArticle(article: { title: string; summary: string; content: string; category: string; sourceUrl: string }) {
-  for (const [value, max] of [[article.title, 180], [article.summary, 500], [article.content, 20000]] as const) {
+  for (const [value, max] of [[article.title, 180], [article.summary, 2000], [article.content, 20000]] as const) {
     if (!value.trim() || value.length > max) throw new Error("نص الخبر فارغ أو يتجاوز الحد المسموح.");
   }
   if (!isKnownCategory(article.category)) throw new Error("راجعي تصنيف الخبر قبل اعتماده.");

@@ -1,3 +1,4 @@
+import SourceCredit from "../../SourceCredit";
 
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
@@ -71,10 +72,6 @@ export default async function ArticlePage({ params }: PageProps) {
   if (`/news/${id}` !== articlePath(article)) permanentRedirect(articlePath(article));
   const related = await prisma.article.findMany({ where: { status: "PUBLISHED", id: { not: article.id }, category: article.category }, orderBy: { publishedAt: "desc" }, take: 4, select: { id: true, title: true } });
 
-  const paragraphs = article.content
-    .split(/\n\s*\n/)
-    .filter((paragraph) => paragraph.trim());
-
   return (
     <main
       dir="rtl"
@@ -101,6 +98,7 @@ export default async function ArticlePage({ params }: PageProps) {
               </span>
             </div>
 
+            <p className="mb-3 text-sm font-bold text-amber-800">الخبر في دقيقة</p>
             <h1 className="text-3xl font-black leading-relaxed sm:text-4xl">
               {article.title}
             </h1>
@@ -138,29 +136,8 @@ export default async function ArticlePage({ params }: PageProps) {
             </div>
           )}
 
-          <div className="px-6 py-10 sm:px-10">
-            <div className="space-y-6 text-lg leading-10 text-zinc-800">
-              {paragraphs.map((paragraph, index) => (
-                <p key={index} className="whitespace-pre-line">
-                  {paragraph.trim()}
-                </p>
-              ))}
-            </div>
-
-            <div className="mt-12 border-t border-zinc-200 pt-6">
-              <h2 className="font-bold">
-                المصدر الأصلي
-              </h2>
-
-              <a
-                href={article.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-block break-all text-sm text-amber-700 underline"
-              >
-                {article.sourceName || "زيارة المصدر الأصلي"} ↗
-              </a>
-            </div>
+          <div className="border-t border-zinc-100 px-6 py-5 text-sm text-zinc-500 sm:px-10">
+            <SourceCredit sourceName={article.sourceName} sourceUrl={article.sourceUrl} />
           </div>
         </article>
         {related.length > 0 && <nav aria-label="أخبار ذات صلة" className="mt-8 rounded-2xl bg-white p-6"><h2 className="font-bold">أخبار ذات صلة</h2><ul>{related.map(item => <li key={item.id} className="mt-3"><Link className="text-amber-800 underline" href={articlePath(item)}>{item.title}</Link></li>)}</ul></nav>}

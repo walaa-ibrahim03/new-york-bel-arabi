@@ -22,6 +22,7 @@ async function requireAdmin() {
   ) {
     throw new Error("Access denied.");
   }
+  return adminEmail;
 }
 
 function readText(
@@ -57,8 +58,8 @@ function validateUrl(value: string, field: string) {
 
 function readArticle(formData: FormData) {
   const title = readText(formData, "title", 180);
-  const summary = readText(formData, "summary", 500);
-  const content = readText(formData, "content", 20000);
+  const summary = readText(formData, "summary", 2000);
+  const content = formData.get("format") === "minute" ? summary : readText(formData, "content", 20000);
   const rawCategory = readText(formData, "category", 70);
   const category = normalizeCategory(rawCategory);
   const borough = readText(formData, "borough", 70);
@@ -81,15 +82,21 @@ function readArticle(formData: FormData) {
   };
 }
 
-function saveStatus(formData: FormData, data: ReturnType<typeof readArticle>) {
+function saveState(formData: FormData, data: ReturnType<typeof readArticle>, admin: string) {
   const intent = formData.get("intent") ?? "draft";
-  if (intent !== "draft" && intent !== "review") throw new Error("Invalid editorial intent");
-  if (intent === "review") validateEditorialArticle(data);
-  return intent === "review" ? "IN_REVIEW" : "DRAFT";
+  if (!["draft", "review", "publish"].includes(String(intent))) throw new Error("Invalid editorial intent");
+  if (intent !== "draft") validateEditorialArticle(data);
+  if (intent === "publish") {
+    if (formData.get("publicationConfirmed") !== "yes") throw new Error("أكدي مراجعة النص والحقائق وحقوق النشر قبل النشر.");
+    if (!/[\u0621-\u064A]/.test(data.title) || !/[\u0621-\u064A]/.test(data.summary)) throw new Error("يجب إعداد عنوان وملخص عربيين قبل النشر.");
+    const now = new Date();
+    return { status: "PUBLISHED", reviewedAt: now, reviewedBy: admin, approvedAt: now, approvedBy: admin, publishedAt: now };
+  }
+  return { status: intent === "review" ? "IN_REVIEW" : "DRAFT", reviewedAt: null, reviewedBy: null, approvedAt: null, approvedBy: null, publishedAt: null };
 }
 
 export async function createArticle(formData: FormData) {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const data = readArticle(formData);
   if (!data.sourceName) throw new Error("Source name is required");
@@ -99,18 +106,20 @@ export async function createArticle(formData: FormData) {
     data: {
       ...data,
       ...readPendingOriginal(formData.get("pendingOriginal"), data.sourceUrl),
-      status: saveStatus(formData, data),
+      ...saveState(formData, data, admin),
     },
   });
 
   revalidatePath("/admin");
   revalidatePath("/");
+  revalidatePath("/sitemap.xml");
+  revalidatePath("/news-sitemap.xml");
 
   redirect("/admin");
 }
 
 export async function updateArticle(formData: FormData) {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const id = Number(formData.get("id"));
 
@@ -133,8 +142,8 @@ export async function updateArticle(formData: FormData) {
     data: {
       ...data,
       ...(!existing.originalTitle && !existing.originalSummary && !existing.originalContent ? readPendingOriginal(formData.get("pendingOriginal"), data.sourceUrl) : {}),
-      status: saveStatus(formData, data), publishedAt: null,
-      reviewedAt: null, reviewedBy: null, approvedAt: null, approvedBy: null,
+      ...(formData.get("format") === "minute" ? { content: existing.content } : {}),
+      ...saveState(formData, data, admin),
       revision: { increment: 1 },
     },
   });
@@ -142,6 +151,7 @@ export async function updateArticle(formData: FormData) {
   revalidatePath(`/news/${id}`);
   revalidatePath(`/admin/edit/${id}`);
   revalidatePath("/sitemap.xml");
+  revalidatePath("/news-sitemap.xml");
 
   revalidatePath("/admin");
   revalidatePath("/");

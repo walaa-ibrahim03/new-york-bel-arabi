@@ -7,11 +7,6 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
 import {
-  submitArticleForReview,
-  approveArticle,
-  returnArticleToDraft,
-  publishArticle,
-  approveAndPublishArticle,
   unpublishArticle,
   deleteArticle,
   importNewsFromRSS,
@@ -325,24 +320,7 @@ const result = await importNewsFromRSS(selectedSource);
                       تعديل الخبر
                     </Link>
 
-                    {article.status === "DRAFT" && <button type="button" disabled={isPending} onClick={() => runAction(article.id, submitArticleForReview)} className="rounded-lg border px-4 py-2">إرسال للمراجعة</button>}
-                    {article.status === "IN_REVIEW" && <button type="button" disabled={isPending} onClick={() => runAction(article.id, approveArticle)} className="rounded-lg border px-4 py-2">اعتماد الخبر بعد المراجعة</button>}
-                    {article.status === "IN_REVIEW" && <button type="button" disabled={isPending || readOnly} onClick={() => { if (window.confirm("أؤكد أنني راجعت الوقائع ونسب المصدر وحقوق المحتوى. اعتماد الخبر ونشره الآن؟")) runAction(article.id, approveAndPublishArticle); }} className="rounded-lg bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">اعتماد ونشر الآن</button>}
-                    {["IN_REVIEW", "APPROVED"].includes(article.status) && <button type="button" disabled={isPending} onClick={() => runAction(article.id, returnArticleToDraft)} className="rounded-lg border px-4 py-2">إعادة إلى المسودة</button>}
-                    {article.status === "APPROVED" && (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() =>
-                          runAction(article.id, publishArticle)
-                        }
-                        className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        {isPending && busyId === article.id
-                          ? "جارٍ التنفيذ..."
-                          : "نشر الآن"}
-                      </button>
-                    )}
+                    {article.status !== "PUBLISHED" && !readOnly && <Link href={`/admin/edit/${article.id}`} className="rounded-lg bg-green-700 px-4 py-2 font-bold text-white">مراجعة ونشر الآن</Link>}
 
                     {article.status === "PUBLISHED" && (
                       <button

@@ -169,7 +169,7 @@ export default async function Home() {
               <span className="text-amber-500">بالعربي</span>
             </span>
             <span className="mt-2 block text-sm text-slate-500">
-              منصتك العربية لأخبار نيويورك
+              الخبر في دقيقة — نيويورك وأمريكا والعالم
             </span>
           </Link>
         </div>

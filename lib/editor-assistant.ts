@@ -8,7 +8,7 @@ export function detectNewsLanguage(text: string): "ar" | "en" | "mixed" | "unkno
   return ar > en ? "ar" : "en";
 }
 export function validateEditorText(text: EditorText): EditorText {
-  if (!text || typeof text.title !== "string" || typeof text.summary !== "string" || typeof text.content !== "string" || !text.title.trim() || !text.content.trim() || text.title.length > 180 || text.summary.length > 500 || text.content.length > 8000) throw new Error("أدخلي عنوانًا ونصًا حتى 8000 حرف قبل المعالجة.");
+  if (!text || typeof text.title !== "string" || typeof text.summary !== "string" || typeof text.content !== "string" || !text.title.trim() || !text.content.trim() || text.title.length > 180 || text.summary.length > 8000 || text.content.length > 8000) throw new Error("أدخلي عنوانًا ونصًا حتى 8000 حرف قبل المعالجة.");
   return { title: text.title, summary: text.summary, content: text.content };
 }
 export function readPendingOriginal(value: FormDataEntryValue | null, sourceUrl: string) {
