@@ -17,7 +17,7 @@ export async function translateNewsToArabic(
 ): Promise<NewsTranslation> {
   assertNewsOperationAllowed();
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is missing");
+    throw Object.assign(new Error("AI service is not configured"), { code: "AI_NOT_CONFIGURED" });
   }
 
   // حماية من إرسال نصوص فارغة أو طويلة جدًا

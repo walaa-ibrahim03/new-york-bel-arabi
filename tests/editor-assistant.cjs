@@ -24,3 +24,11 @@ test('editor reuses identical preview, prevents rapid duplicate calls and accept
  nodes=all(render());assert.equal(nodes.find(e=>e.props?.name==='title').props.value,original.title);nodes.find(e=>e.type==='button'&&e.props.children==='ترجمة إلى العربية').props.onClick();assert.equal(calls,1);
  nodes=all(render());nodes.find(e=>e.type==='button'&&e.props.children==='استخدام النتيجة في الحقول').props.onClick();nodes=all(render());assert.equal(nodes.find(e=>e.props?.name==='title').props.value,'عنوان خيالي');const snapshot=JSON.parse(nodes.find(e=>e.props?.name==='pendingOriginal').props.value);assert.equal(snapshot.content,original.content);
 });
+test('AI provider failure is explicit and redacted; editor and SEO remain independent',async t=>{
+ const errors=load('lib/ai-errors.ts');for(const error of [{status:403},{status:401},{status:429},{status:404},{status:503},{name:'APIConnectionTimeoutError'},{code:'AI_NOT_CONFIGURED'}]){const message=errors.aiFailureMessage({...error,message:'private credential detail'});assert.ok(message.includes('SEO'));assert.equal(message.includes('private'),false);}
+ assert.equal(errors.aiFailureMessage(Error('invalid input')),null);
+ env(t,{ADMIN_EMAIL:'admin@example.org',NYBA_NEWS_MODE:'read-write'});let calls=0;
+ const api=load('app/admin/assistant-actions.ts',{'../../auth':{auth:async()=>({user:{email:'admin@example.org'}})},'../../lib/database-guard':{assertNewsOperationAllowed:()=>{},requireDatabaseTarget:()=>{}},'../../lib/prisma':{prisma:{}},'../../lib/translate-news':{translateNewsToArabic:async()=>{calls++;throw Object.assign(Error('private credential detail'),{status:403});}}});
+ const result=await api.prepareEditorText(request);assert.equal(result.ok,false);assert.equal(calls,1);assert.match(result.message,/SEO/);assert.equal(result.message.includes('private'),false);
+ const seo=load('lib/news-seo.ts').newsMetadata({id:1,title:'Synthetic title',summary:'Synthetic summary',category:'عام',imageUrl:null,publishedAt:null});assert.equal(seo.description,'Synthetic summary');
+});

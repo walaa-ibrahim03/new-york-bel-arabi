@@ -7,6 +7,7 @@ import { validateWebUrl } from "../../lib/article-policy";
 import { validateEditorText, type EditorText, type EditorOperation } from "../../lib/editor-assistant";
 import { validateBriefNumbers } from "../../lib/factual-brief";
 import { translateNewsToArabic } from "../../lib/translate-news";
+import { aiFailureMessage } from "../../lib/ai-errors";
 
 export async function prepareEditorText(input: { text: EditorText; operation: EditorOperation; sourceUrl: string; rightsConfirmed: boolean; id?: number; revision?: number }) {
   try {
@@ -26,5 +27,5 @@ export async function prepareEditorText(input: { text: EditorText; operation: Ed
     const draft = await translateNewsToArabic(text.title, text.summary, text.content, input.operation === "simplify" ? "simplify" : "licensed");
     validateBriefNumbers(`${text.title} ${text.summary} ${text.content}`, draft, false);
     return { ok: true as const, draft };
-  } catch { return { ok: false as const, message: "تعذرت المعالجة. راجعي طول النص والحقوق وإعداد النموذج. لم يتغير الأصل ولم يُحفظ أو يُنشر شيء. يمكن إعداد موجز وقائعي دون إعادة صياغة النص المحمي." }; }
+  } catch (error) { return { ok: false as const, message: aiFailureMessage(error) ?? "تعذرت المعالجة. راجعي طول النص والحقوق وإعداد النموذج. لم يتغير الأصل ولم يُحفظ أو يُنشر شيء. يمكن إعداد موجز وقائعي دون إعادة صياغة النص المحمي." }; }
 }
