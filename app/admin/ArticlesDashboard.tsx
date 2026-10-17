@@ -1,5 +1,6 @@
 
 "use client";
+import LocalNewsSources from "./LocalNewsSources";
 
 import { statusLabels } from "../../lib/article-policy";
 import Link from "next/link";
@@ -121,7 +122,7 @@ export default function ArticlesDashboard({
     >
       <div className="mx-auto max-w-6xl">
         {readOnly && <p role="status" className="mb-5 rounded-lg bg-amber-50 p-4 text-amber-900">هذه النسخة تعمل بوضع القراءة فقط؛ الحذف والتحرير والاستيراد متوقفة مؤقتًا لحماية البيانات.</p>}
-        <p className="mb-4"><Link href="/admin/sources" className="font-bold text-amber-800 underline">دليل المصادر والمتابعة والجدولة ←</Link></p>
+
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="mb-2 text-sm font-semibold text-amber-600">
@@ -138,17 +139,9 @@ export default function ArticlesDashboard({
         </header>
 
         <Link href="/admin/quick" className="mb-5 inline-block rounded-xl bg-amber-600 px-6 py-3 text-lg font-bold text-white">إضافة خبر سريع</Link>
-        <section aria-label="إضافة الأخبار" className="mb-6 grid gap-4 sm:grid-cols-2">
-          <Link href="/admin/new" className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:border-amber-400">
-            <h2 className="text-xl font-bold">إضافة خبر يدويًا</h2>
-            <p className="mt-2 text-sm leading-7 text-zinc-600">اكتبي الخبر وأضيفي المصدر والصورة، ثم عاينيه واحفظيه كمسودة أو انشريه بعد التأكيد.</p>
-          </Link>
-          <a href="#news-discovery" className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm transition hover:border-amber-400">
-            <h2 className="text-xl font-bold">النشر السريع للأخبار</h2>
-            <p className="mt-2 text-sm leading-7 text-zinc-600">اختاري المصدر والقسم ثم العناوين المطلوبة لتجهيز مسودات عربية ومراجعتها ونشرها.</p>
-          </a>
-        </section>
-        <SourceDiscovery readOnly={readOnly} origin={siteOrigin} />
+        <LocalNewsSources />
+        <p className="mb-6"><Link href="/admin/new" className="text-amber-800 underline">إضافة خبر يدويًا — المحرر المعتاد للتحرير المطول</Link></p>
+        <details className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4"><summary className="cursor-pointer font-bold">مصادر إضافية وحكومية (اختياري)</summary><div className="mt-4"><SourceDiscovery readOnly={readOnly} origin={siteOrigin} /><Link href="/admin/sources" className="text-amber-800 underline">دليل المصادر والمتابعة والجدولة</Link></div></details>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
           <StatCard label="إجمالي الأخبار" value={visibleArticles.length} />

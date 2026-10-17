@@ -5,7 +5,7 @@ import { prepareEditorText } from "../assistant-actions";
 import { saveArticle } from "../editor-actions";
 import { quickEntryInput } from "../../../lib/quick-entry";
 
-export default function QuickEntry({ readOnly }: { readOnly: boolean }) {
+export default function QuickEntry({ readOnly, source }: { readOnly: boolean; source?: { name: string; url: string } }) {
   const [url, setUrl] = useState("");
   const [facts, setFacts] = useState("");
   const [draft, setDraft] = useState<{ title: string; summary: string; sourceUrl: string; sourceName: string; facts: string } | null>(null);
@@ -37,6 +37,7 @@ export default function QuickEntry({ readOnly }: { readOnly: boolean }) {
   return <main dir="rtl" className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900"><div className="mx-auto max-w-2xl space-y-5">
     <Link href="/admin" className="text-amber-800 underline">العودة إلى لوحة الإدارة</Link>
     <h1 className="text-3xl font-bold">إضافة خبر سريع</h1>
+    {source && <p className="rounded-xl bg-amber-50 p-4">المصدر المختار: {source.name} · <a href={source.url} target="_blank" rel="noopener noreferrer" className="underline">فتح أخبار المصدر</a>. الصقي رابط المقال المحدد والوقائع التي راجعتِها أدناه.</p>}
     <p>الرابط للتوثيق فقط؛ لا نجلب المقال أو الصور. اكتبي الوقائع بأسلوبك، دون لصق نص محمي. راجعي الأسماء والأرقام قبل النشر.</p>
     {readOnly && <p role="status">هذه النسخة للقراءة فقط؛ التجهيز والحفظ والنشر متوقفة.</p>}
     <label className="block">رابط الخبر الأصلي<input className="input-style mt-2 w-full" type="url" dir="ltr" maxLength={2000} value={url} disabled={busy || saving} onChange={e => { setUrl(e.target.value); setDraft(null); }} /></label>
