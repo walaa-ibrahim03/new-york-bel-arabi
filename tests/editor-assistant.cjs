@@ -64,6 +64,21 @@ test('minute AI options use existing service, bounded requested length, protecte
  const html=renderToStaticMarkup(React.createElement(C));assert.equal(html.includes('المحتوى الكامل'),false);assert.equal(html.includes('موجز عربي سريع من مصدر واحد'),false);assert.equal(html.includes('value="review"'),false);assert.ok(html.includes('value="publish"'));assert.ok(html.includes('name="publicationConfirmed"'));assert.ok(html.includes('40–80'));
 });
 
+test('new and edit long-form editors show the explicit source review checkbox and current wording for all four flagged sources',()=>{
+ const React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
+ const C=load('app/admin/ArticleForm.tsx',{'next/link':{__esModule:true,default:'a'},'./editor-actions':{saveArticle:()=>{}},'./assistant-actions':{prepareEditorText:()=>{throw Error('No AI');}},'./image-actions':{uploadArticleImage:()=>{throw Error('No uploads');}},react:{...React,useActionState:()=>[{error:''},()=>{},false]}}).default;
+ const policy=load('lib/news-sources.ts');
+ assert.equal(policy.sourceReviewMessage,'أؤكد أنني راجعت الخبر الأصلي وتحققت من الوقائع وأعدت صياغة النص، دون نسخ المقال أو ترجمته دون إذن.');
+ for(const id of ['abc7ny','nbc','post','silive']){
+  const source=policy.newsSources.find(item=>item.id===id),sourceUrl=new URL('/fictional-review-test',source.feedUrl).href;
+  const article={id:990001,revision:0,...original,originalTitle:original.title,originalSummary:original.summary,originalContent:original.content,category:'عام',borough:'نيويورك',sourceName:source.name,sourceUrl,imageUrl:null};
+  for(const props of [{discoverySource:{name:source.name,url:sourceUrl,title:'خبر خيالي'}},{article}]){
+   const html=renderToStaticMarkup(React.createElement(C,props));assert.match(html,/<input[^>]*type="checkbox"[^>]*name="sourceReviewConfirmed"[^>]*value="yes"/);assert.ok(html.includes(policy.sourceReviewMessage));assert.equal(source.headlineAccess,'restricted');
+  }
+ }
+ const html=renderToStaticMarkup(React.createElement(C,{discoverySource:{name:'NASA',url:'https://www.nasa.gov/fictional-review-test',title:'خبر خيالي'}}));assert.equal(html.includes('name="sourceReviewConfirmed"'),false);
+});
+
 test('discovery is read-only metadata, permission-separated, admin/guard gated, bounded and deduplicated',async t=>{
  env(t,{ADMIN_EMAIL:'admin@example.org',NYBA_NEWS_MODE:'read-write'});let authorized=true,match=true,calls=[];
  const api=load('app/admin/discovery-actions.ts',{'../../auth':{auth:async()=>authorized?{user:{email:'admin@example.org'}}:null},'../../lib/database-guard':{assertNewsOperationAllowed:()=>{if(process.env.NYBA_NEWS_MODE!=='read-write')throw Error('readonly');},requireDatabaseTarget:()=>{if(!match)throw Error('guard');}},'../../lib/rss':{fetchRSS:async(...args)=>{calls.push(args);return[{title:'Fictional 2030 test',link:'https://www.nasa.gov/news-release/synthetic?utm_source=x',summary:'PROTECTED BODY MUST NOT RETURN'},{title:'duplicate',link:'https://www.nasa.gov/news-release/synthetic',summary:'SECRET BODY'},{title:'invalid',link:'https://evil.example.org/article'},{title:'script',link:'javascript:alert(1)'}];}}});

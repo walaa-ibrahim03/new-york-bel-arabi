@@ -30,7 +30,7 @@ test('deletion audit logs only an ID, role, outcome and timestamp; sink failure 
 test('review-flagged sources require a separate explicit acknowledgement on create, update and legacy publication',async t=>{
  const {s,editor,legacy}=fixture(t),f=form(),url='https://abc7ny.com/fictional';s.article.sourceUrl=url;f.set('sourceUrl',url);
  await assert.rejects(editor.createArticle(f),/راجعت الخبر الأصلي/);assert.equal(s.writes.length,0);
- f.set('id','900001');f.set('revision','0');await assert.rejects(editor.updateArticle(f),/بأسلوبي/);assert.equal(s.writes.length,0);
+ f.set('id','900001');f.set('revision','0');await assert.rejects(editor.updateArticle(f),/أعدت صياغة النص/);assert.equal(s.writes.length,0);
  f.set('sourceReviewConfirmed','true');await assert.rejects(editor.updateArticle(f));assert.equal(s.writes.length,0);
  f.set('sourceReviewConfirmed','yes');await editor.updateArticle(f);assert.equal(s.writes.length,1);assert.equal(s.writes[0].data.status,'PUBLISHED');assert.equal(s.writes[0].data.originalContent,undefined);
  s.writes.length=0;f.delete('sourceReviewConfirmed');f.set('intent','draft');await editor.updateArticle(f);assert.equal(s.writes[0].data.status,'DRAFT');

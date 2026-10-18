@@ -8,7 +8,7 @@ import { searchQuickNews, prepareQuickDraft, saveQuickArticle } from "./quick-ac
 import SocialKit, { EditorialCover } from "./SocialKit";
 
 type Result={title:string;source:string;date:string;url:string;token:string;needsFacts?:boolean;detailMessage?:string};
-type Draft={id:number;revision:number;title:string;summary:string;category:string;sourceName:string;sourceUrl?:string};
+type Draft={id:number;revision:number;title:string;summary:string;category:string;sourceName:string;sourceUrl:string};
 export default function SourceDiscovery({readOnly=true,origin=""}:{readOnly?:boolean;origin?:string}) {
   const[selected,setSelected]=useState<string>("official-ny"),[section,setSection]=useState("ny");
   const[results,setResults]=useState<Result[]>([]),[checked,setChecked]=useState<string[]>([]),[drafts,setDrafts]=useState<Draft[]>([]),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[failedIds,setFailedIds]=useState<number[]>([]);
