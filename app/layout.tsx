@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
+import { siteOrigin, searchIndexable } from "../lib/news-seo";
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -9,6 +10,9 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
+  metadataBase: siteOrigin() ? new URL(siteOrigin()!) : undefined,
+  robots: { index: searchIndexable(), follow: searchIndexable() },
+  verification: process.env.GOOGLE_SITE_VERIFICATION ? { google: process.env.GOOGLE_SITE_VERIFICATION } : undefined,
   title: "نيويورك بالعربي | New York Bel Arabi",
   description:
     "أخبار نيويورك والخدمات والوظائف والفعاليات باللغة العربية",

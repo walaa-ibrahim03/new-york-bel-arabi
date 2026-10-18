@@ -1,10 +1,11 @@
+import { siteOrigin, searchIndexable } from "../lib/news-seo";
 import type { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const siteUrl = siteOrigin();
 
   // Keep the development site out of search engines.
-  if (!siteUrl) {
+  if (!siteUrl || !searchIndexable()) {
     return {
       rules: {
         userAgent: "*",
@@ -20,11 +21,11 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
       disallow: [
-        "/admin/",
+        "/admin",
         "/login",
         "/api/",
       ],
     },
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: [`${baseUrl}/sitemap.xml`, `${baseUrl}/news-sitemap.xml`],
   };
 }

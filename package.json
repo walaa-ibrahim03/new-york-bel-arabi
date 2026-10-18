@@ -4,20 +4,29 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && next build --webpack",
+    "build:check": "node scripts/check-production-build.cjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:phase-one": "node scripts/check-offline.cjs test",
+    "typecheck:offline": "node scripts/check-offline.cjs typecheck",
+    "check:test-env": "node scripts/check-test-env.cjs",
+    "preview:test:check": "node scripts/preview-test-site.cjs --check",
+    "preview:test": "node scripts/preview-test-site.cjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
+    "@vercel/blob": "2.8.2",
     "next": "16.4.0",
     "next-auth": "^5.0.0-beta.32",
     "openai": "^7.34.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

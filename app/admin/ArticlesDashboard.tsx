@@ -1,14 +1,15 @@
 
 "use client";
+import QuickEntry from "./quick/QuickEntry";
 
+import { statusLabels } from "../../lib/article-policy";
 import Link from "next/link";
+import SourceDiscovery from "./SourceDiscovery";
 import { useMemo, useState, useTransition } from "react";
 
 import {
-  publishArticle,
   unpublishArticle,
   deleteArticle,
-  importNewsFromRSS,
 } from "./actions";
 
 type Article = {
@@ -21,52 +22,35 @@ type Article = {
   createdAt: string;
 };
 
-type Filter = "ALL" | "DRAFT" | "PUBLISHED";
+type Filter = "ALL" | "DRAFT" | "IN_REVIEW" | "APPROVED" | "PUBLISHED";
 
 export default function ArticlesDashboard({
   articles,
+  readOnly = true,
+  siteOrigin = "",
 }: {
   articles: Article[];
+  readOnly?: boolean;
+  siteOrigin?: string;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
   const [isPending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
-const [importMessage, setImportMessage] = useState("");
-const [isImporting, setIsImporting] = useState(false);
-const [selectedSource, setSelectedSource] = useState("gothamist");
-
-function handleImportRSS() {
-  if (isPending || isImporting) return;
-
-  setError("");
-  setImportMessage("");
-  setIsImporting(true);
-
-  startTransition(async () => {
-    try {
-const result = await importNewsFromRSS(selectedSource);
-      setImportMessage(
-        `تم استيراد ${result.imported} خبر جديد، وتجاوز ${result.skipped} خبر مكرر أو غير صالح.`
-      );
-    } catch {
-      setError("فشل جلب الأخبار من RSS. حاولي مرة أخرى.");
-    } finally {
-      setIsImporting(false);
-    }
-  });
-}
-  const published = articles.filter(
+  const [deletedIds, setDeletedIds] = useState<number[]>([]);
+  const [deleteFeedback, setDeleteFeedback] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+  const visibleArticles = useMemo(() => articles.filter(article => !deletedIds.includes(article.id)), [articles, deletedIds]);
+  const published = visibleArticles.filter(
     (a) => a.status === "PUBLISHED"
   ).length;
 
-  const drafts = articles.filter(
+  const drafts = visibleArticles.filter(
     (a) => a.status === "DRAFT"
   ).length;
 
   const filteredArticles = useMemo(() => {
-    return articles.filter((article) => {
+    return visibleArticles.filter((article) => {
       const matchesSearch = article.title
         .toLowerCase()
         .includes(search.trim().toLowerCase());
@@ -76,7 +60,7 @@ const result = await importNewsFromRSS(selectedSource);
 
       return matchesSearch && matchesStatus;
     });
-  }, [articles, search, filter]);
+  }, [visibleArticles, search, filter]);
 
   function runAction(
     id: number,
@@ -99,7 +83,7 @@ const result = await importNewsFromRSS(selectedSource);
   }
 
   function handleDelete(id: number, title: string) {
-    if (isPending) return;
+    if (isPending || readOnly) return;
 
     if (
       !window.confirm(
@@ -109,12 +93,25 @@ const result = await importNewsFromRSS(selectedSource);
       return;
     }
 
-    runAction(id, deleteArticle);
+    setError("");
+    setDeleteFeedback(null);
+    setBusyId(id);
+    startTransition(async () => {
+      try {
+        const result = await deleteArticle(id);
+        setDeleteFeedback({ id, ok: result.ok, message: result.message });
+        if (result.ok) setDeletedIds(previous => [...previous, id]);
+      } catch {
+        setDeleteFeedback({ id, ok: false, message: "تعذّر إكمال طلب الحذف. أعيدي تحميل الصفحة للتحقق من حالة الخبر قبل المحاولة مجددًا." });
+      } finally { setBusyId(null); }
+    });
   }
 
   const filters: { label: string; value: Filter }[] = [
     { label: "جميع الأخبار", value: "ALL" },
     { label: "المسودات", value: "DRAFT" },
+    { label: "قيد المراجعة", value: "IN_REVIEW" },
+    { label: "المعتمدة", value: "APPROVED" },
     { label: "المنشورة", value: "PUBLISHED" },
   ];
 
@@ -124,6 +121,8 @@ const result = await importNewsFromRSS(selectedSource);
       className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900 sm:px-8"
     >
       <div className="mx-auto max-w-6xl">
+        {readOnly && <p role="status" className="mb-5 rounded-lg bg-amber-50 p-4 text-amber-900">هذه النسخة تعمل بوضع القراءة فقط؛ الحذف والتحرير والاستيراد متوقفة مؤقتًا لحماية البيانات.</p>}
+
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="mb-2 text-sm font-semibold text-amber-600">
@@ -137,36 +136,13 @@ const result = await importNewsFromRSS(selectedSource);
             </p>
           </div>
 
-<select
-  value={selectedSource}
-  onChange={(e) => setSelectedSource(e.target.value)}
-  disabled={isPending || isImporting}
-  aria-label="اختيار مصدر الأخبار"
-  className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900"
->
-  <option value="gothamist">Gothamist</option>
-  <option value="the-city">THE CITY</option>
-  <option value="amny">amNewYork</option>
-</select>
-
-          <button
-  type="button"
-  onClick={handleImportRSS}
-  disabled={isPending || isImporting}
-  className="rounded-xl bg-amber-400 px-5 py-3 font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
->
-  {isImporting ? "جارٍ جلب الأخبار..." : "جلب الأخبار من RSS"}
-</button>
-          <Link
-            href="/admin/new"
-            className="rounded-xl bg-zinc-900 px-5 py-3 font-semibold text-white hover:bg-zinc-700"
-          >
-            + إضافة خبر جديد
-          </Link>
         </header>
 
+        <QuickEntry readOnly={readOnly} embedded />
+        <details className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4"><summary className="cursor-pointer font-bold">خيارات إضافية</summary><div className="mt-4 space-y-4"><p><Link href="/admin/new" className="text-amber-800 underline">إضافة خبر يدويًا — المحرر المطوّل</Link></p><SourceDiscovery readOnly={readOnly} origin={siteOrigin} /><Link href="/admin/sources" className="text-amber-800 underline">دليل المصادر والمتابعة والجدولة</Link></div></details>
+
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
-          <StatCard label="إجمالي الأخبار" value={articles.length} />
+          <StatCard label="إجمالي الأخبار" value={visibleArticles.length} />
           <StatCard label="المنشورة" value={published} />
           <StatCard label="المسودات" value={drafts} />
         </section>
@@ -204,14 +180,7 @@ const result = await importNewsFromRSS(selectedSource);
               </button>
             ))}
           </div>
-{importMessage && (
-  <p
-    role="status"
-    className="mb-4 rounded-lg bg-green-50 p-4 text-sm text-green-800"
-  >
-    {importMessage}
-  </p>
-)}
+
           {error && (
             <p
               role="alert"
@@ -220,6 +189,7 @@ const result = await importNewsFromRSS(selectedSource);
               {error}
             </p>
           )}
+          {deleteFeedback?.ok && <p role="status" className="mb-4 rounded-lg bg-green-50 p-4 text-green-800">{deleteFeedback.message}</p>}
 
           <p className="mb-4 text-sm text-zinc-500">
             عدد النتائج: {filteredArticles.length}
@@ -244,11 +214,7 @@ const result = await importNewsFromRSS(selectedSource);
                           : "bg-amber-50 text-amber-700"
                       }`}
                     >
-                      {article.status === "PUBLISHED"
-                        ? "منشور"
-                        : article.status === "DRAFT"
-                          ? "مسودة"
-                          : article.status}
+                      {statusLabels[article.status] ?? article.status}
                     </span>
 
                     <span className="text-xs text-zinc-500">
@@ -289,20 +255,7 @@ const result = await importNewsFromRSS(selectedSource);
                       تعديل الخبر
                     </Link>
 
-                    {article.status === "DRAFT" && (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() =>
-                          runAction(article.id, publishArticle)
-                        }
-                        className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        {isPending && busyId === article.id
-                          ? "جارٍ التنفيذ..."
-                          : "نشر الخبر"}
-                      </button>
-                    )}
+                    {article.status !== "PUBLISHED" && !readOnly && <Link href={`/admin/edit/${article.id}`} className="rounded-lg bg-green-700 px-4 py-2 font-bold text-white">مراجعة ونشر الآن</Link>}
 
                     {article.status === "PUBLISHED" && (
                       <button
@@ -321,15 +274,16 @@ const result = await importNewsFromRSS(selectedSource);
 
                     <button
                       type="button"
-                      disabled={isPending}
+                      disabled={isPending || readOnly}
                       onClick={() =>
                         handleDelete(article.id, article.title)
                       }
                       className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
                     >
-                      حذف نهائي
+                      {isPending && busyId === article.id ? "جارٍ الحذف..." : "حذف نهائي"}
                     </button>
                   </div>
+                  {deleteFeedback?.id === article.id && !deleteFeedback.ok && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-red-700">{deleteFeedback.message}</p>}
                 </article>
               ))}
             </div>

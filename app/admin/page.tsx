@@ -2,6 +2,8 @@ import { prisma } from "../../lib/prisma";
 import { auth } from "../../auth";
 import { redirect } from "next/navigation";
 import ArticlesDashboard from "./ArticlesDashboard";
+import { siteOrigin } from "../../lib/news-seo";
+import { isNewsReadOnly } from "../../lib/database-guard";
 
 import { connection } from "next/server";
 export const instant = false;
@@ -40,5 +42,5 @@ export default async function AdminPage() {
     createdAt: article.createdAt.toISOString(),
   }));
 
-  return <ArticlesDashboard articles={dashboardArticles} />;
+  return <ArticlesDashboard articles={dashboardArticles} readOnly={isNewsReadOnly()} siteOrigin={siteOrigin() ?? ""} />;
 }

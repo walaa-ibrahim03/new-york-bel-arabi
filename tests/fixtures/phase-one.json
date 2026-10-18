@@ -1,0 +1,20 @@
+{
+  "notice": "Synthetic fixtures only. Not real news. No seed operation is performed.",
+  "rssItems": [
+    { "title": "TEST ONLY: Immigration information workshop", "summary": "TEST ONLY: A fictional community group offers an immigration information workshop in Queens.", "link": "https://example.org/test/immigration-workshop", "publishedAt": "2026-10-14T12:00:00Z" },
+    { "title": "TEST ONLY: Immigration information workshop", "summary": "Duplicate synthetic item.", "link": "https://example.org/test/immigration-workshop", "publishedAt": "2026-10-14T12:00:00Z" },
+    { "title": "TEST ONLY: Immigration unsafe URL", "summary": "Rejected synthetic item.", "link": "javascript:void(0)", "publishedAt": "2026-10-14T12:00:00Z" },
+    { "title": "TEST ONLY: Immigration invalid date", "summary": "Rejected synthetic item.", "link": "https://example.org/test/invalid-date", "publishedAt": "not-a-date" },
+    { "title": "TEST ONLY: Unrelated topic", "summary": "A fictional review of distant stars.", "link": "https://example.org/test/unrelated", "publishedAt": "2026-10-14T12:00:00Z" }
+  ],
+  "translation": {
+    "title": "للاختبار فقط: ورشة معلومات عن الهجرة",
+    "summary": "تنظّم مجموعة مجتمعية خيالية ورشة معلومات عن الهجرة في كوينز.",
+    "content": "للاختبار فقط، وليس خبرًا حقيقيًا: تنظّم مجموعة مجتمعية خيالية ورشة معلومات عن الهجرة في كوينز."
+  },
+  "legacyArticles": [
+    { "title": "للاختبار فقط: مسودة قديمة", "summary": "خبر تجريبي بلا أصل محفوظ.", "content": "نص خيالي لاختبار توافق الأخبار القديمة.", "sourceUrl": "https://example.org/test/legacy-draft", "status": "DRAFT", "category": "الهجرة", "borough": "نيويورك" },
+    { "title": "للاختبار فقط: خبر منشور قديم", "summary": "خبر تجريبي منشور بلا اعتماد تاريخي.", "content": "نص خيالي لاختبار بقاء المنشور القديم ظاهرًا.", "sourceUrl": "https://example.org/test/legacy-published", "status": "PUBLISHED", "publishedAt": "2026-10-14T12:00:00Z", "category": "سكن واقتصاد", "borough": "بروكلين" },
+    { "title": "للاختبار فقط: تصنيف تاريخي", "summary": "يجب ألا يضيع التصنيف عند التحرير.", "content": "نص خيالي لاختبار تصنيف قديم غير موجود في القائمة.", "sourceUrl": "https://example.org/test/legacy-category", "status": "DRAFT", "category": "تصنيف تجريبي قديم", "borough": "نيويورك" }
+  ]
+}
