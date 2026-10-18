@@ -85,7 +85,7 @@ function uploader(authorized=true){
  const calls={auth:0,prepare:0,put:0};
  const api=load('app/admin/image-actions.ts',{
   'node:crypto':{randomUUID:()=> 'synthetic-id'},'../../auth':{auth:async()=>{calls.auth++;return authorized?{user:{email:'admin@example.org'}}:null;}},
-  '../../lib/article-image':{prepareArticleImage:async()=>{calls.prepare++;return Buffer.from('sanitized image');}},
+  '../../lib/article-image':{imageMimeTypes:['image/jpeg','image/png','image/webp'],maxImageBytes:2*1024*1024,prepareArticleImage:async()=>{calls.prepare++;return Buffer.from('sanitized image');}},
   '@vercel/blob':{put:async(pathname,_image,options)=>{calls.put++;assert.match(pathname,/^news\/synthetic-id\.webp$/);assert.equal(options.access,'public');assert.equal(options.contentType,'image/webp');assert.equal(options.addRandomSuffix,true);return{url:'https://fixture.public.blob.vercel-storage.com/news/synthetic.webp'};}},
  });return{api,calls};
 }
@@ -135,10 +135,44 @@ test('uploaded attachment policy accepts only sanitized news WebP on the configu
 test('upload widget previews locally, rejects unsupported files, requires rights and coalesces requests without saving an article',async t=>{
  const states=[],refs=[];let si=0,ri=0,confirmed=false,pending=false,attached='',calls=0,resolve;const cleanups=[];const oldCreate=URL.createObjectURL,oldRevoke=URL.revokeObjectURL;const revoked=[];URL.createObjectURL=()=> 'blob:synthetic-preview';URL.revokeObjectURL=url=>revoked.push(url);t.after(()=>{URL.createObjectURL=oldCreate;URL.revokeObjectURL=oldRevoke;});
  const hooks={...React,useState:initial=>{const i=si++;if(!(i in states))states[i]=initial;return[states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},useRef:initial=>{const i=ri++;return refs[i]??(refs[i]={current:initial});},useEffect:fn=>{cleanups.push(fn());}};
- const C=load('app/admin/ArticleImageUpload.tsx',{react:hooks,'./image-actions':{uploadArticleImage:async data=>{calls++;assert.equal(data.get('imageRightsConfirmed'),'yes');assert.ok(data.get('image') instanceof File);return new Promise(r=>{resolve=r;});}}}).default;
+ const C=load('app/admin/ArticleImageUpload.tsx',{react:hooks,'../../lib/browser-article-image':{BrowserImageError:Error,prepareBrowserArticleImage:async file=>{if(file.type==='image/svg+xml')throw Error('نوع الصورة غير مدعوم');return file;}},'./image-actions':{uploadArticleImage:async data=>{calls++;assert.equal(data.get('imageRightsConfirmed'),'yes');assert.ok(data.get('image') instanceof File);return new Promise(r=>{resolve=r;});}}}).default;
  function all(n){return n&&typeof n==='object'?[n,...[n.props?.children].flat(Infinity).flatMap(all)]:[];}
  function render(){si=0;ri=0;return all(C({imageUrl:attached,confirmed,disabled:false,onChange:url=>{attached=url;},onConfirmed:v=>{confirmed=v;},onBusyChange:v=>{pending=v;}}));}
- let nodes=render();const file=n=>n.find(x=>x.type==='input'&&x.props.type==='file');file(nodes).props.onChange({target:{files:[new File(['bad'],'bad.svg',{type:'image/svg+xml'})],value:'bad'}});assert.equal(pending,false);assert.equal(calls,0);
- nodes=render();file(nodes).props.onChange({target:{files:[new File(['fixture'],'fictional.png',{type:'image/png'})]}});nodes=render();assert.equal(pending,true);assert.ok(nodes.some(n=>n.type==='img'&&n.props.src==='blob:synthetic-preview'));let upload=nodes.find(n=>n.type==='button'&&n.props.children==='رفع الصورة');assert.equal(upload.props.disabled,true);await upload.props.onClick();assert.equal(calls,0);
+ let nodes=render();const file=n=>n.find(x=>x.type==='input'&&x.props.type==='file');await file(nodes).props.onChange({target:{files:[new File(['bad'],'bad.svg',{type:'image/svg+xml'})],value:'bad'}});assert.equal(pending,false);assert.equal(calls,0);
+ nodes=render();await file(nodes).props.onChange({target:{files:[new File(['fixture'],'fictional.png',{type:'image/png'})]}});nodes=render();assert.equal(pending,true);assert.ok(nodes.some(n=>n.type==='img'&&n.props.src==='blob:synthetic-preview'));let upload=nodes.find(n=>n.type==='button'&&n.props.children==='رفع الصورة');assert.equal(upload.props.disabled,true);await upload.props.onClick();assert.equal(calls,0);
  nodes.find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});nodes=render();upload=nodes.find(n=>n.type==='button'&&n.props.children==='رفع الصورة');const task=upload.props.onClick();upload.props.onClick();assert.equal(calls,1);resolve({ok:true,url:'https://fixture.public.blob.vercel-storage.com/news/fixture.webp',message:'رُفعت الصورة؛ احفظي المسودة لربطها.'});await task;nodes=render();assert.equal(pending,false);assert.ok(nodes.some(n=>n.type==='img'&&n.props.src===attached));assert.ok(attached.endsWith('fixture.webp'));cleanups.filter(Boolean).forEach(fn=>fn());assert.ok(revoked.includes('blob:synthetic-preview'));
 });
+
+async function browserImageFixture(t,{width=4000,height=3000,decodeFails=false,fallback=false,encode}={}){
+ const saved={createImageBitmap:global.createImageBitmap,Image:global.Image,document:global.document,create:URL.createObjectURL,revoke:URL.revokeObjectURL};const state={closed:0,revoked:[],draws:[],qualities:[]};
+ global.createImageBitmap=async(_file,options)=>{assert.equal(options.imageOrientation,'from-image');if(decodeFails||fallback)throw Error('Native decode unavailable');return{width,height,close:()=>state.closed++};};
+ global.Image=class{width=width;height=height;set src(_url){queueMicrotask(()=>decodeFails?this.onerror():this.onload());}};
+ URL.createObjectURL=()=> 'blob:offline-image';URL.revokeObjectURL=url=>state.revoked.push(url);
+ global.document={createElement:tag=>{assert.equal(tag,'canvas');const canvas={width:0,height:0,getContext:()=>({fillRect:()=>{},drawImage:(_image,_x,_y,w,h)=>state.draws.push([w,h])}),toBlob:(cb,type,quality)=>{assert.equal(type,'image/jpeg');state.qualities.push(quality);Promise.resolve(encode?encode(canvas,state.qualities.length):sharp({create:{width:canvas.width,height:canvas.height,channels:3,background:'#ffffff'}}).jpeg({quality:Math.round(quality*100)}).toBuffer().then(bytes=>new Blob([bytes],{type:'image/jpeg'}))).then(cb);}};return canvas;}};
+ t.after(()=>{for(const k of ['createImageBitmap','Image','document']){if(saved[k]===undefined)delete global[k];else global[k]=saved[k];}URL.createObjectURL=saved.create;URL.revokeObjectURL=saved.revoke;});return state;
+}
+test('browser downsizes a >2MB high-resolution photo to valid JPEG under 2MB and 1600px, then server checks still accept it',async t=>{
+ const state=await browserImageFixture(t),convert=load('lib/browser-article-image.ts').prepareBrowserArticleImage;
+ const result=await convert(new File([new Uint8Array(3*1024*1024)],'fictional.jpg',{type:'image/jpeg'}));assert.equal(result.type,'image/jpeg');assert.ok(result.size<=2*1024*1024);const metadata=await sharp(Buffer.from(await result.arrayBuffer())).metadata();assert.equal(metadata.width,1600);assert.equal(metadata.height,1200);assert.equal(metadata.exif,undefined);assert.equal(state.closed,1);
+ const checked=await load('lib/article-image.ts',{sharp:{__esModule:true,default:sharp}}).prepareArticleImage(result);assert.equal((await sharp(checked).metadata()).format,'webp');
+});
+test('browser preserves small dimensions, bounds tall images and lowers quality before reducing dimensions further',async t=>{
+ const state=await browserImageFixture(t,{width:800,height:4000,encode:(_canvas,n)=>new Blob([new Uint8Array(n===1?2*1024*1024+1:200)],{type:'image/jpeg'})});
+ const convert=load('lib/browser-article-image.ts').prepareBrowserArticleImage,result=await convert(new File(['synthetic'],'fixture.png',{type:'image/png'}));assert.equal(result.size,200);assert.deepEqual(state.draws[0],[320,1600]);assert.deepEqual(state.qualities,[0.86,0.72]);
+});
+test('native HEIC decoding fallback converts locally and frees the object URL',async t=>{
+ const state=await browserImageFixture(t,{width:800,height:600,fallback:true});const result=await load('lib/browser-article-image.ts').prepareBrowserArticleImage(new File(['synthetic'],'fixture.HEIC',{type:'image/heic'}));assert.equal(result.type,'image/jpeg');assert.deepEqual(state.draws[0],[800,600]);assert.deepEqual(state.revoked,['blob:offline-image']);
+});
+test('unsupported HEIF decoder gives explicit Arabic export instructions without uploading',async t=>{
+ const state=await browserImageFixture(t,{decodeFails:true});await assert.rejects(load('lib/browser-article-image.ts').prepareBrowserArticleImage(new File(['synthetic'],'fixture.heif',{type:''})),/HEIC\/HEIF.*JPEG/);assert.deepEqual(state.revoked,['blob:offline-image']);assert.equal(state.qualities.length,0);
+});
+test('browser conversion distinguishes unsupported types, empty/oversized inputs and encoding failure',async t=>{
+ await browserImageFixture(t,{encode:()=>null});const convert=load('lib/browser-article-image.ts').prepareBrowserArticleImage;
+ await assert.rejects(convert(new File(['<svg/>'],'fixture.svg',{type:'image/svg+xml'})),/نوع الصورة/);await assert.rejects(convert(new File([],'empty.jpg',{type:'image/jpeg'})),/فارغ/);await assert.rejects(convert(new File([new Uint8Array(50*1024*1024+1)],'huge.jpg',{type:'image/jpeg'})),/50 ميغابايت/);await assert.rejects(convert(new File(['synthetic'],'fixture.png',{type:'image/png'})),/فشل تحويل/);
+});
+test('browser refuses a still-oversized result after bounded quality/resize attempts',async t=>{
+ const state=await browserImageFixture(t,{encode:()=>new Blob([new Uint8Array(2*1024*1024+1)],{type:'image/jpeg'})});await assert.rejects(load('lib/browser-article-image.ts').prepareBrowserArticleImage(new File(['synthetic'],'fixture.webp',{type:'image/webp'})),/بقي حجم الصورة أكبر/);assert.equal(state.qualities.length,12);assert.ok(state.draws[1][0]<state.draws[0][0]);assert.equal(state.closed,1);
+});
+test('upload retains server size/type limits and gives exact safe rejection messages before storage',async()=>environment(storageEnv,async()=>{
+ const u=uploader();for(const [file,reason] of [[new File(['x'],'x.heic',{type:'image/heic'}),/نوع الصورة/],[new File([],'empty.jpg',{type:'image/jpeg'}),/فارغ/],[new File([new Uint8Array(2*1024*1024+1)],'large.jpg',{type:'image/jpeg'}),/يتجاوز 2/]]){const data=new FormData();data.set('image',file);data.set('imageRightsConfirmed','yes');const result=await u.api.uploadArticleImage(data);assert.equal(result.ok,false);assert.match(result.message,reason);}assert.equal(u.calls.prepare,0);assert.equal(u.calls.put,0);
+}));
