@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { isSourceArticleUrl } from "./news-sources";
 import { normalizeImportedUrl } from "./article-policy";
+import { rssCounters, skipRss, type RssCounters } from "./rss-diagnostics";
 
 import { quickSections } from "./quick-sections";
 export { quickSections } from "./quick-sections";
@@ -22,19 +23,23 @@ export function matchQuickSection(section: string, title: string, summary: strin
   if (section === "trend") return false; // No external interest metric is configured.
   return (section === "us" && (coverage === "US" || coverage === "NY")) || (section === "ny" && coverage === "NY") || Boolean(topics[section]?.test(`${title} ${summary}`));
 }
-export function quickCandidates(items: {title:string;summary:string;link:string;publishedAt:string;topics?:string[]}[], source: {id:string;name:string;feedUrl:string;coverage?:string;articlePrefix?:string}, section: string, existingUrls: string[], now = Date.now(), limit = 5): QuickCandidate[] {
+export function quickCandidates(items: {title:string;summary:string;link:string;publishedAt:string;topics?:string[]}[], source: {id:string;name:string;feedUrl:string;coverage?:string;articlePrefix?:string}, section: string, existingUrls: string[], now = Date.now(), limit = 5, stats: RssCounters = rssCounters(items.length)): QuickCandidate[] {
   const selected = quickSections.find(item => item.id === section);
   if (!selected || section === "trend") throw new Error("لا يتوفر مؤشر اهتمام موثق للترند؛ اختاري قسمًا آخر.");
   const seen = new Set(existingUrls.flatMap(url => { try { return [normalizeImportedUrl(url)]; } catch { return []; } }));
-  return [...items].sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt)).flatMap(item => {
+  const candidates = [...items].sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt)).flatMap(item => {
     try {
       const url = normalizeImportedUrl(item.link), title = item.title.replace(/<[^>]*>/g, "").trim(), summary = item.summary.trim();
       const date = Date.parse(item.publishedAt);
-      if (!isSourceArticleUrl(source, url) || !title || title.length > 180 || summary.length > 8000 || !Number.isFinite(date) || date > now || seen.has(url) || !matchQuickSection(section, title, (item.topics ?? []).join(" "), source.coverage)) return [];
+      const reason = !isSourceArticleUrl(source, url) ? "wrong_host" : !title ? "missing_fields" : title.length > 180 || summary.length > 8000 ? "invalid_text" : !Number.isFinite(date) ? "invalid_date" : date > now ? "future_date" : seen.has(url) ? "duplicate" : !matchQuickSection(section, title, (item.topics ?? []).join(" "), source.coverage) ? "section" : undefined;
+      if (reason) { skipRss(stats, reason); return []; }
       seen.add(url);
       return [{ sourceId: source.id, sourceName: source.name, title, summary, url, date: new Date(date).toISOString(), category: selected.category, borough: section === "ny" ? "نيويورك" : section === "world" ? "العالم" : source.coverage === "NY" ? "نيويورك" : source.coverage === "US" ? "أمريكا" : "العالم", expires: now + 20 * 60_000 }];
-    } catch { return []; }
-  }).sort((a,b) => Date.parse(b.date)-Date.parse(a.date)).slice(0,limit);
+    } catch { skipRss(stats, "invalid_url"); return []; }
+  }).sort((a,b) => Date.parse(b.date)-Date.parse(a.date));
+  stats.shown = Math.min(candidates.length, limit);
+  if (candidates.length > limit) skipRss(stats, "limit", candidates.length - limit);
+  return candidates.slice(0,limit);
 }
 function key() { if (!process.env.AUTH_SECRET) throw new Error("Selection signing unavailable"); return process.env.AUTH_SECRET; }
 export function signQuickCandidate(candidate: QuickCandidate) {

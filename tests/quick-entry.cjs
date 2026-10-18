@@ -28,14 +28,14 @@ test('local source cards render four useful external links and four quick editor
  },m,m.exports);
  const html=renderToStaticMarkup(React.createElement(m.exports.default));assert.equal((html.match(/target="_blank"/g)||[]).length,4);assert.equal((html.match(/href="\/admin\/quick\?source=/g)||[]).length,4);assert.ok(html.includes('lg:grid-cols-3'));assert.ok(!html.includes('NASA'));assert.ok(!html.includes('disabled'));
 });
-test('headline discovery has independent technical readiness and access policy; reference text and translation grant do not activate it',()=>{
+test('headline discovery treats access policy as a flag; unknown and technically disabled sources still fail',()=>{
  const p=load('lib/news-sources.ts'),source=p.newsSources.find(s=>s.id==='the-city'),before=structuredClone(source);
  try{
   source.discovery.reference='';source.permission.reference='';source.permission.automaticImport=false;source.permission.translation=false;
   assert.equal(p.canDiscoverHeadlines(source),true);assert.equal(p.requireDiscoverySource(source.feedUrl),source);assert.equal(p.isSourceApproved(source),false);
   source.discovery.automatic=false;assert.equal(p.canDiscoverHeadlines(source),false);assert.throws(()=>p.requireDiscoverySource(source.feedUrl));
-  source.discovery.automatic=true;source.headlineAccess='restricted';source.discovery.reference='A long documentary reference cannot grant access';assert.equal(p.canDiscoverHeadlines(source),false);assert.throws(()=>p.requireDiscoverySource(source.feedUrl));
+  source.discovery.automatic=true;source.headlineAccess='restricted';source.discovery.reference='A long documentary reference cannot grant access';assert.equal(p.canDiscoverHeadlines(source),true);assert.equal(p.requireDiscoverySource(source.feedUrl),source);assert.equal(source.headlineAccess,'restricted');assert.throws(()=>p.requireRssFactsSource(source.feedUrl));
  }finally{Object.assign(source,before);}
- for(const id of ['abc7ny','nbc','post','silive']){const s=p.newsSources.find(s=>s.id===id);assert.ok(s);assert.equal(s.discovery.automatic,true);assert.equal(s.headlineAccess,'restricted');assert.throws(()=>p.requireDiscoverySource(s.feedUrl));assert.equal(p.isSourceApproved(s),false);}
+ for(const id of ['abc7ny','nbc','post','silive']){const s=p.newsSources.find(s=>s.id===id);assert.ok(s);assert.equal(s.discovery.automatic,true);assert.equal(s.headlineAccess,'restricted');assert.equal(p.requireDiscoverySource(s.feedUrl),s);assert.equal(p.canDiscoverHeadlines(s),true);assert.equal(p.isSourceApproved(s),false);assert.throws(()=>p.requireApprovedSource(s.feedUrl));}
  assert.throws(()=>p.requireDiscoverySource('https://evil.example/feed'));
 });

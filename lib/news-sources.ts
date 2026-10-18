@@ -137,7 +137,8 @@ export function requireFullTranslationPermission(sourceUrl: string) {
 export function requireDiscoverySource(feedUrl: string) {
   const source = newsSources.find(item => item.feedUrl === feedUrl);
   if (!source?.discovery?.automatic) throw new Error("موصل RSS غير مفعّل تقنيًا.");
-  if (source.headlineAccess !== "allowed") throw new Error("طريقة الجلب الآلي مقيدة بشروط المصدر.");
+  // headlineAccess is a review flag for metadata discovery, not a runtime gate.
+  // This does not grant article/snippet/image reuse permission.
   return source;
 }
 
@@ -147,7 +148,7 @@ export function sourceForDirectory(directoryUrl: string) {
 
 export function requireRssFactsSource(feedUrl: string) {
   const source = requireDiscoverySource(feedUrl);
-  if (!source.rssFacts?.allowed || !source.rssFacts.reference.trim()) throw new Error("RSS facts not approved");
+  if (source.headlineAccess !== "allowed" || !source.rssFacts?.allowed || !source.rssFacts.reference.trim()) throw new Error("RSS facts not approved");
   return source;
 }
 export function isSourceArticleUrl(source: { feedUrl: string; articlePrefix?: string }, value: string) {
@@ -159,7 +160,7 @@ export function isSourceArticleUrl(source: { feedUrl: string; articlePrefix?: st
   } catch { return false; }
 }
 
-// Technical readiness and access policy are explicit; documentary references never toggle runtime access.
+// Technical readiness only. Access review remains visible as source metadata.
 export function canDiscoverHeadlines(source: NewsSource | undefined): boolean {
-  return Boolean(source?.discovery?.automatic && source.headlineAccess === "allowed");
+  return Boolean(source?.discovery?.automatic);
 }

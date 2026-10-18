@@ -1,6 +1,7 @@
 import { assertNewsOperationAllowed, requireDatabaseTarget } from "./database-guard";
 
 import Parser from "rss-parser";
+import { reportRss, rssCounters, rssReadError, RssReadError } from "./rss-diagnostics";
 
 import { requireApprovedSource, requireDiscoverySource, requireRssFactsSource } from "./news-sources";
 const parser = new Parser({ timeout: 15000, maxRedirects: 0 });
@@ -11,7 +12,15 @@ export async function fetchRSS(feedUrl: string, purpose: "import" | "headlines" 
   else if (purpose === "headlines") source = requireDiscoverySource(feedUrl);
   else { assertNewsOperationAllowed(); source = requireApprovedSource(feedUrl); }
   requireDatabaseTarget();
-  const feed = source?.officialNY ? await officialFeed(feedUrl) : await parser.parseURL(feedUrl);
+  let feed;
+  try {
+    feed = source?.officialNY ? await officialFeed(feedUrl) : await parser.parseURL(feedUrl);
+  } catch (error) {
+    const failure = rssReadError(error);
+    reportRss(source?.id ?? "unknown", purpose === "import" ? "import" : "discovery", rssCounters(), failure.kind, failure.httpStatus);
+    throw failure;
+  }
+  reportRss(source?.id ?? "unknown", purpose === "import" ? "import" : "discovery", rssCounters(feed.items.length), "read");
 
   return feed.items.map((item) => ({
     title: item.title?.trim() ?? "",
@@ -34,7 +43,7 @@ async function officialFeed(url: string) {
 }
 async function readOfficialFeed(url: string) {
   const response = await fetch(url, { signal: AbortSignal.timeout(8000), redirect: "error", cache: "no-store", headers: { Accept: "application/rss+xml, application/xml, text/xml" } });
-  if (!response.ok || !response.body) { await response.body?.cancel(); throw new Error("Official feed unavailable"); }
+  if (!response.ok || !response.body) { await response.body?.cancel(); throw new RssReadError("http", response.status); }
   const reader = response.body.getReader(), chunks: Uint8Array[] = [];
   let size = 0;
   try {

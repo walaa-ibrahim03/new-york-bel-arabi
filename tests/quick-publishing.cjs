@@ -106,5 +106,39 @@ test('wired local discovery returns five selected-source headline/date/link toke
  let fetches=0,reads=0;
  const api=load('app/admin/quick-actions.ts',{'../../auth':{auth:async()=>({user:{email:'admin@example.org'}})},'../../lib/database-guard':{requireDatabaseTarget:()=>{},assertNewsOperationAllowed:()=>{}},'../../lib/news-sources':policy,'../../lib/prisma':{prisma:{article:{findMany:async()=>{reads++;return[];},create:()=>{throw Error('No writes');},updateMany:()=>{throw Error('No writes');}}}},'../../lib/rss':{fetchRSS:async(url,purpose)=>{fetches++;assert.equal(url,source.feedUrl);assert.equal(purpose,'headlines');return Array.from({length:7},(_,i)=>({title:`Fictional Brooklyn school update for testing ${i}`,link:`https://abc7ny.com/fictional/${i}`,summary:'',publishedAt:new Date(Date.now()-(i+1)*3600000).toISOString()}));}},'../../lib/translate-news':{translateNewsToArabic:()=>{throw Error('No AI');}},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{},unstable_rethrow:()=>{}}});
  const result=await api.searchQuickNews('https://abc7ny.com/','ny');assert.equal(result.ok,true);assert.equal(result.items.length,5);assert.equal(fetches,1);assert.equal(reads,1);assert.ok(result.items.every(row=>row.source==='ABC7NY'&&row.date&&row.url&&row.token));
- source.headlineAccess='restricted';assert.equal((await api.searchQuickNews('https://abc7ny.com/','ny')).ok,false);assert.equal(fetches,1,'restricted access fails before RSS');
+ source.headlineAccess='restricted';assert.equal((await api.searchQuickNews('https://abc7ny.com/','ny')).ok,true);assert.equal(fetches,2,'access flag does not block metadata RSS');assert.equal(source.headlineAccess,'restricted');
+});
+
+test('discovery diagnostics count every filtered item without logging article text, URLs or credentials',()=>{
+ const q=load('lib/quick-news.ts'),diag=load('lib/rss-diagnostics.ts'),rows=items(),stats=diag.rssCounters(14);
+ rows.push({...rows[0]}, {...rows[0],link:'https://example.org/foreign'}, {...rows[0],link:'javascript:alert(1)'}, {...rows[0],link:'https://www.nasa.gov/blank',title:''}, {...rows[0],link:'https://www.nasa.gov/undated',publishedAt:''}, {...rows[0],link:'https://www.nasa.gov/future',publishedAt:new Date(Date.now()+3600000).toISOString()});
+ const out=q.quickCandidates(rows,source,'schools',[],Date.now(),5,stats);
+ assert.equal(out.length,5);assert.equal(stats.saved,0);assert.equal(stats.skipped,9);assert.equal(stats.read,stats.shown+stats.skipped);
+ assert.deepEqual(stats.reasons,{future_date:1,duplicate:1,wrong_host:1,invalid_url:1,missing_fields:1,invalid_date:1,limit:3});
+ const logs=[],original=console.info;try{console.info=(...args)=>logs.push(args.join(' '));diag.reportRss('nasa-releases','discovery',stats,'ready');}finally{console.info=original;}
+ assert.equal(logs.length,1);assert.ok(!/https?:|Fictional|password|token/.test(logs[0]));
+});
+test('rss-parser HTTP and timeout errors are classified without leaking arbitrary exception text',()=>{
+ const diag=load('lib/rss-diagnostics.ts');for(const status of [301,403,429,503]){const e=diag.rssReadError(Error('Status code '+status));assert.equal(e.kind,'http');assert.equal(e.httpStatus,status);assert.equal(e.message,'RSS read failed');}
+ assert.equal(diag.rssReadError(Error('Request timed out after 15000ms')).kind,'timeout');
+ const e=diag.rssReadError(Error('private password https://user:secret@example.org'));assert.equal(e.kind,'network_or_parse');assert.ok(!e.message.includes('secret'));
+});
+test('all four review-flagged local sources return five metadata choices without writes, AI or changing flags',async t=>{
+ const{api,state}=harness(t);const policy=load('lib/news-sources.ts');
+ for(const id of ['abc7ny','nbc','post','silive']){const s=policy.newsSources.find(row=>row.id===id);state.items=Array.from({length:7},(_,i)=>({title:`Fictional Brooklyn school update for testing ${i}`,summary:'',link:new URL('/fictional/'+i,s.feedUrl).href,publishedAt:new Date(Date.now()-(i+1)*3600000).toISOString()}));const result=await api.searchQuickNews(s.directoryUrl,'ny');assert.equal(result.ok,true);assert.equal(result.items.length,5);assert.equal(s.headlineAccess,'restricted');}
+ assert.equal(state.fetch,4);assert.equal(state.writes,0);assert.equal(state.ai,0);
+ state.authorized=false;assert.match((await api.searchQuickNews('https://abc7ny.com/','ny')).message,/المدير/);state.authorized=true;state.match=false;assert.match((await api.searchQuickNews('https://abc7ny.com/','ny')).message,/حارس/);assert.equal(state.fetch,4);
+});
+test('quick search distinguishes HTTP, timeout, database reads and signing errors without exposing secrets',async t=>{
+ env(t);const diag=load('lib/rss-diagnostics.ts');let failure='http';
+ const api=load('app/admin/quick-actions.ts',{'../../auth':{auth:async()=>({user:{email:'admin@example.org'}})},'../../lib/database-guard':{requireDatabaseTarget:()=>{},assertNewsOperationAllowed:()=>{}},'../../lib/rss-diagnostics':diag,'../../lib/prisma':{prisma:{article:{findMany:async()=>{if(failure==='database')throw Error('private password');return[];}}}},'../../lib/rss':{fetchRSS:async()=>{if(failure==='http')throw new diag.RssReadError('http',403);if(failure==='timeout')throw new diag.RssReadError('timeout');return items().map(row=>({...row,link:row.link.replace('www.nasa.gov','abc7ny.com')}));}},'../../lib/translate-news':{translateNewsToArabic:()=>{throw Error('No AI');}},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{},unstable_rethrow:()=>{}}});
+ let result=await api.searchQuickNews('https://abc7ny.com/','ny');assert.match(result.message,/HTTP 403/);failure='timeout';result=await api.searchQuickNews('https://abc7ny.com/','ny');assert.match(result.message,/مهلة/);failure='database';result=await api.searchQuickNews('https://abc7ny.com/','ny');assert.match(result.message,/قراءة الأخبار/);assert.ok(!result.message.includes('password'));
+ failure='signing';delete process.env.AUTH_SECRET;result=await api.searchQuickNews('https://abc7ny.com/','ny');assert.match(result.message,/توقيع/);
+});
+test('legacy import diagnostics report actual draft saves and separate skip reasons using isolated storage',async()=>{
+ const base=items()[0],rows=[{...base,link:'https://www.nasa.gov/saved'}, {...base,link:'https://www.nasa.gov/new'}, {...base,link:'https://www.nasa.gov/new'}, {...base,link:'javascript:alert(1)'}, {...base,link:'https://example.org/foreign'}, {...base,link:'https://www.nasa.gov/empty',title:''}, {...base,link:'https://www.nasa.gov/long',title:'x'.repeat(181)}, {...base,link:'https://www.nasa.gov/bad-date',publishedAt:'invalid'}, {...base,link:'https://www.nasa.gov/new-two'}];
+ const saved=[],logs=[],original=console.info;
+ const importer=load('lib/import-rss.ts',{'./database-guard':{assertNewsOperationAllowed:()=>{}},'./rss':{fetchRSS:async()=>rows},'./prisma':{prisma:{article:{findMany:async()=>[{sourceUrl:'https://www.nasa.gov/saved'}],create:async q=>saved.push(q.data)}}}});
+ try{console.info=(tag,json)=>{if(tag==='[rss-diagnostic]')logs.push(JSON.parse(json));};await importer.importRSS({feedUrl:source.feedUrl});}finally{console.info=original;}
+ assert.equal(saved.length,2);assert.ok(saved.every(row=>row.status==='DRAFT'));assert.equal(logs.length,1);assert.equal(logs[0].read,9);assert.equal(logs[0].saved,2);assert.equal(logs[0].skipped,7);assert.deepEqual(logs[0].reasons,{duplicate:2,invalid_url:1,wrong_host:1,missing_fields:1,invalid_text:1,invalid_date:1});assert.ok(!JSON.stringify(logs).includes('https://'));
 });
