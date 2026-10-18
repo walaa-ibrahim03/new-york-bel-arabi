@@ -5,7 +5,7 @@ function load(file,mocks={}){
  const filename=path.resolve(file),sandboxModule={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  new Function('require','module','exports',code)(id=>{
-  if(Object.hasOwn(mocks,id))return mocks[id];
+  if(Object.hasOwn(mocks,id))return mocks[id];if(id==='./image-actions')return{uploadArticleImage:()=>{throw Error('Storage forbidden in offline rendering');}};
   if(id==='react/jsx-runtime'||id==='react')return require(id);
   if(id.startsWith('.')){const base=path.resolve(path.dirname(filename),id);return load(fs.existsSync(base+'.ts')?base+'.ts':base+'.tsx',mocks);}
   throw Error('External access blocked: '+id);
@@ -90,7 +90,7 @@ function uploader(authorized=true){
  });return{api,calls};
 }
 test('upload requires writable admin, verified guard and configured storage; isolated mode never uses production token',async()=>{
- const data=new FormData();data.set('image',new File(['fixture'],'x.png',{type:'image/png'}));
+ const data=new FormData();data.set('image',new File(['fixture'],'x.png',{type:'image/png'}));data.set('imageRightsConfirmed','yes');
  for(const change of [{NYBA_NEWS_MODE:'read-only'},{NYBA_DATABASE_PROFILE:'isolated-test'},{BLOB_READ_WRITE_TOKEN:''},{DATABASE_URL:'invalid'}])await environment({...storageEnv,...change},async()=>{const u=uploader();assert.equal((await u.api.uploadArticleImage(data)).ok,false);assert.equal(u.calls.put,0);assert.equal(u.calls.prepare,0);});
  await environment(storageEnv,async()=>{const u=uploader(false);assert.equal((await u.api.uploadArticleImage(data)).ok,false);assert.equal(u.calls.put,0);});
  await environment(storageEnv,async()=>{const u=uploader();const result=await u.api.uploadArticleImage(data);assert.equal(result.ok,true);assert.equal(u.calls.put,1);assert.equal('token' in result,false);});
@@ -123,4 +123,22 @@ test('concurrent RSS unique conflict is skipped without modifying an existing ar
   './prisma':{prisma:{article:{findMany:async()=>[],create:async()=>{attempts++;throw{code:'P2002'};}}}},
  });
  const result=await api.importRSS({feedUrl:'synthetic'});assert.equal(result.imported,0);assert.equal(result.skipped,1);assert.equal(attempts,1);
+});
+
+test('image upload requires explicit rights before decoding or contacting Blob',async()=>environment(storageEnv,async()=>{
+ const data=new FormData();data.set('image',new File(['fixture'],'x.png',{type:'image/png'}));const u=uploader();const denied=await u.api.uploadArticleImage(data);assert.equal(denied.ok,false);assert.match(denied.message,/حق استخدام/);assert.equal(u.calls.put,0);assert.equal(u.calls.prepare,0);
+}));
+test('uploaded attachment policy accepts only sanitized news WebP on the configured public store with rights acknowledgement',async()=>environment(storageEnv,async()=>{
+ const {validateUploadedImageAttachment:v}=load('lib/uploaded-image-policy.ts');const url='https://fixture.public.blob.vercel-storage.com/news/fictional-image.webp';assert.doesNotThrow(()=>v(url,true));assert.throws(()=>v(url,false),/حق استخدام/);
+ for(const bad of ['https://other.public.blob.vercel-storage.com/news/a.webp','http://fixture.public.blob.vercel-storage.com/news/a.webp','https://fixture.public.blob.vercel-storage.com/news/a.svg',url+'?x=1',url+'#fragment','https://user:password@fixture.public.blob.vercel-storage.com/news/a.webp','https://fixture.public.blob.vercel-storage.com/elsewhere/a.webp'])assert.throws(()=>v(bad,true));
+}));
+test('upload widget previews locally, rejects unsupported files, requires rights and coalesces requests without saving an article',async t=>{
+ const states=[],refs=[];let si=0,ri=0,confirmed=false,pending=false,attached='',calls=0,resolve;const cleanups=[];const oldCreate=URL.createObjectURL,oldRevoke=URL.revokeObjectURL;const revoked=[];URL.createObjectURL=()=> 'blob:synthetic-preview';URL.revokeObjectURL=url=>revoked.push(url);t.after(()=>{URL.createObjectURL=oldCreate;URL.revokeObjectURL=oldRevoke;});
+ const hooks={...React,useState:initial=>{const i=si++;if(!(i in states))states[i]=initial;return[states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},useRef:initial=>{const i=ri++;return refs[i]??(refs[i]={current:initial});},useEffect:fn=>{cleanups.push(fn());}};
+ const C=load('app/admin/ArticleImageUpload.tsx',{react:hooks,'./image-actions':{uploadArticleImage:async data=>{calls++;assert.equal(data.get('imageRightsConfirmed'),'yes');assert.ok(data.get('image') instanceof File);return new Promise(r=>{resolve=r;});}}}).default;
+ function all(n){return n&&typeof n==='object'?[n,...[n.props?.children].flat(Infinity).flatMap(all)]:[];}
+ function render(){si=0;ri=0;return all(C({imageUrl:attached,confirmed,disabled:false,onChange:url=>{attached=url;},onConfirmed:v=>{confirmed=v;},onBusyChange:v=>{pending=v;}}));}
+ let nodes=render();const file=n=>n.find(x=>x.type==='input'&&x.props.type==='file');file(nodes).props.onChange({target:{files:[new File(['bad'],'bad.svg',{type:'image/svg+xml'})],value:'bad'}});assert.equal(pending,false);assert.equal(calls,0);
+ nodes=render();file(nodes).props.onChange({target:{files:[new File(['fixture'],'fictional.png',{type:'image/png'})]}});nodes=render();assert.equal(pending,true);assert.ok(nodes.some(n=>n.type==='img'&&n.props.src==='blob:synthetic-preview'));let upload=nodes.find(n=>n.type==='button'&&n.props.children==='رفع الصورة');assert.equal(upload.props.disabled,true);await upload.props.onClick();assert.equal(calls,0);
+ nodes.find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});nodes=render();upload=nodes.find(n=>n.type==='button'&&n.props.children==='رفع الصورة');const task=upload.props.onClick();upload.props.onClick();assert.equal(calls,1);resolve({ok:true,url:'https://fixture.public.blob.vercel-storage.com/news/fixture.webp',message:'رُفعت الصورة؛ احفظي المسودة لربطها.'});await task;nodes=render();assert.equal(pending,false);assert.ok(nodes.some(n=>n.type==='img'&&n.props.src===attached));assert.ok(attached.endsWith('fixture.webp'));cleanups.filter(Boolean).forEach(fn=>fn());assert.ok(revoked.includes('blob:synthetic-preview'));
 });

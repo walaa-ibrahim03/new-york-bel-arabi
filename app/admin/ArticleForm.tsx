@@ -52,6 +52,7 @@ export default function ArticleForm({
   const [category, setCategory] = useState(editorCategory(article?.category ?? "أخبار محلية"));
   const [borough, setBorough] = useState(article?.borough ?? "نيويورك");
   const [imageUrl, setImageUrl] = useState(article?.imageUrl ?? "");
+  const [imageRightsConfirmed,setImageRightsConfirmed]=useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploading, startUpload] = useTransition();
   const [uploadMessage, setUploadMessage] = useState("");
@@ -68,9 +69,9 @@ export default function ArticleForm({
   }
 
   function handleUpload() {
-    if (!imageFile || isUploading || isSaving) return;
+    if (!imageFile || !imageRightsConfirmed || isUploading || isSaving) return;
     setUploadMessage(""); setUploadError("");
-    const form = new FormData(); form.set("image", imageFile);
+    const form = new FormData(); form.set("image", imageFile); form.set("imageRightsConfirmed", "yes");
     startUpload(async () => {
       try {
         const result = await uploadArticleImage(form);
@@ -308,13 +309,14 @@ export default function ArticleForm({
             <Field label="رفع صورة رئيسية (اختياري)">
               <input type="file" accept="image/jpeg,image/png,image/webp" disabled={isUploading || isSaving} onChange={event => {
                 const file = event.target.files?.[0] ?? null;
-                setUploadError(""); setUploadMessage("");
+                setUploadError(""); setUploadMessage("");setImageRightsConfirmed(false);
                 if (file && (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024)) { setImageFile(null); setUploadError("اختاري صورة JPEG أو PNG أو WebP حتى 2 ميغابايت."); }
                 else setImageFile(file);
               }} className="block w-full text-sm" />
             </Field>
             <p className="text-sm leading-7 text-zinc-600">ارفعي صورة تملكينها أو تملكين إذن استخدامها. تُفحص على الخادم وتُزال بياناتها الوصفية. الصورة المرفوعة تصبح متاحة لمن يملك رابطها؛ لا ترفعي صورًا خاصة.</p>
-            <button type="button" onClick={handleUpload} disabled={!imageFile || isUploading || isSaving} className="rounded-xl border border-zinc-300 bg-white px-4 py-2 disabled:opacity-50">{isUploading ? "جارٍ رفع الصورة..." : "رفع الصورة"}</button>
+            <label className="flex gap-2 text-sm"><input type="checkbox" checked={imageRightsConfirmed} disabled={isUploading||isSaving} onChange={e=>setImageRightsConfirmed(e.target.checked)}/>أؤكد أنني أملك حق استخدام هذه الصورة</label>
+            <button type="button" onClick={handleUpload} disabled={!imageFile || !imageRightsConfirmed || isUploading || isSaving} className="rounded-xl border border-zinc-300 bg-white px-4 py-2 disabled:opacity-50">{isUploading ? "جارٍ رفع الصورة..." : "رفع الصورة"}</button>
             {uploadMessage && <p role="status" className="text-sm text-green-800">{uploadMessage}</p>}
             {uploadError && <p role="alert" className="text-sm text-red-700">{uploadError}</p>}
           </section>

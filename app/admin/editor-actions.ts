@@ -2,6 +2,7 @@
 "use server";
 
 import { validatePublication, validateSourceReview, PublicationValidationError } from "../../lib/publication-policy";
+import { validateUploadedImageAttachment } from "../../lib/uploaded-image-policy";
 import { normalizeCategory, isKnownCategory } from "../../lib/categories";
 import { validateWebUrl, validateEditorialArticle } from "../../lib/article-policy";
 import { assertNewsOperationAllowed, isNewsReadOnly } from "../../lib/database-guard";
@@ -71,6 +72,7 @@ function readArticle(formData: FormData) {
 
   validateUrl(sourceUrl, "Source URL");
   validateUrl(imageUrl, "Image URL");
+  if (imageUrl && formData.get("uploadedImage") === "yes") validateUploadedImageAttachment(imageUrl, formData.get("imageRightsConfirmed") === "yes");
 
   return {
     title,

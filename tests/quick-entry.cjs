@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Offline fixtures only. */
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
 function load(file,mocks={}){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText)(id=>{
- if(Object.hasOwn(mocks,id))return mocks[id];
+ if(Object.hasOwn(mocks,id))return mocks[id];if(id==='./image-actions')return{uploadArticleImage:()=>{throw Error('Storage forbidden in offline rendering');}};
  if(id==='react/jsx-runtime')return require(id);
  if(id.startsWith('.')){const base=path.resolve(path.dirname(file),id);return load(fs.existsSync(base+'.ts')?base+'.ts':base+'.tsx',mocks);}
  throw Error('External access blocked: '+id);
@@ -61,7 +61,7 @@ function refreshFixture(t,{readOnly=true}={}) {
  };
  const prepareCalls=[];let prepareResponse=()=>{throw Error('No draft preparation');};
  let response=()=>({ok:true,items:[{title:'Fictional Brooklyn headline',source:'Fictional source',url:'https://abc7ny.com/fixture',date:'2030-01-01T00:00:00Z',token:'fictional-token'}]});
- const m={exports:{}},mocks={react:hooks,'react/jsx-runtime':require('react/jsx-runtime'),'next/link':{__esModule:true,default:'a'},'../assistant-actions':{prepareEditorText:()=>{throw Error('No AI');}},'../editor-actions':{saveArticle:()=>{throw Error('No writes');}},'../quick-actions':{searchQuickNews:async(url,section)=>{calls.push({url,section});return response();},prepareQuickDraft:async token=>{prepareCalls.push(token);return prepareResponse(token);}},'../SourceDiscovery':{QuickDraft:()=>null}};
+ const m={exports:{}},mocks={react:hooks,'react/jsx-runtime':require('react/jsx-runtime'),'next/link':{__esModule:true,default:'a'},'../assistant-actions':{prepareEditorText:()=>{throw Error('No AI');}},'../editor-actions':{saveArticle:()=>{throw Error('No writes');}},'../quick-actions':{searchQuickNews:async(url,section)=>{calls.push({url,section});return response();},prepareQuickDraft:async token=>{prepareCalls.push(token);return prepareResponse(token);}},'../ArticleImageUpload':{__esModule:true,default:()=>null},'../SourceDiscovery':{QuickDraft:()=>null}};
  new Function('require','module','exports',ts.transpileModule(fs.readFileSync('app/admin/quick/QuickEntry.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText)(id=>Object.hasOwn(mocks,id)?mocks[id]:load(path.resolve('app/admin/quick',id)+'.ts'),m,m.exports);
  function all(node){if(!node||typeof node!=='object')return[];return[node,...[node.props?.children].flat(Infinity).flatMap(all)];}
  function render(){cursor=0;const nodes=all(m.exports.default({readOnly,source:{name:'ABC7NY',url:'https://abc7ny.com/'}}));effects.splice(0).forEach(fn=>fn());return nodes;}
