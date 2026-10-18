@@ -57,7 +57,7 @@ test('manual form has RTL, attribution, upload, preview and separate draft and c
  assert.equal(html.includes('value="PUBLISHED"'),false);
 });
 test('dashboard exposes both intake paths and keeps unapproved source import disabled',()=>{
- const Dashboard=load('app/admin/ArticlesDashboard.tsx',{'next/link':{__esModule:true,default:'a'},react:{...React,useActionState:()=>[{error:''},()=>{},false]},'../assistant-actions':{prepareEditorText:()=>{throw Error('No AI in render');}},'../editor-actions':{saveArticle:()=>{}},'./quick-actions':{searchQuickNews:()=>{throw Error('No automatic discovery in render');}},'./actions':{}}).default;
+ const Dashboard=load('app/admin/ArticlesDashboard.tsx',{'next/link':{__esModule:true,default:'a'},react:{...React,useActionState:()=>[{error:''},()=>{},false]},'../quick-actions':{searchQuickNews:()=>{throw Error('No discovery in render');},prepareQuickDraft:()=>{throw Error('No preparation in render');}},'../SourceDiscovery':{QuickDraft:()=>null},'../assistant-actions':{prepareEditorText:()=>{throw Error('No AI in render');}},'../editor-actions':{saveArticle:()=>{}},'./quick-actions':{searchQuickNews:()=>{throw Error('No automatic discovery in render');}},'./actions':{}}).default;
  const html=renderToStaticMarkup(React.createElement(Dashboard,{articles:[],readOnly:false}));
  for(const value of ['إضافة خبر يدويًا','النشر السريع للأخبار','إعداد خبر','href="/admin/new"','id="news-discovery"','مصدر الأخبار السريع'])assert.ok(html.includes(value),value);
  assert.ok(html.includes("جلب أحدث الأخبار"));

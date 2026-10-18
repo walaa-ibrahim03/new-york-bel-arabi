@@ -1,4 +1,4 @@
-import { newsSources, isSourceArticleUrl } from "./news-sources";
+import { newsSources, isSourceArticleUrl, canDiscoverHeadlines } from "./news-sources";
 import { quickCandidates, headlineKey, officialCategory } from "./quick-news";
 import type { QuickCandidate } from "./quick-news";
 
@@ -8,7 +8,7 @@ const ny = /\b(new york|nyc|brooklyn|manhattan|queens|bronx|staten island)\b|Ù†Ù
 const generalImmigration = /\b(policy|policies|filing fees?|registration period|application process|eligibility|form i-\d+|form n-\d+|temporary protected status|h-1b cap)\b/i;
 
 export async function collectOfficialNews(section: string, existing: { sourceUrl: string; title?: string }[], read: Reader, now = Date.now()) {
-  const sources = newsSources.filter(source => source.officialNY && source.discovery?.automatic && source.rssFacts?.allowed);
+  const sources = newsSources.filter(source => source.officialNY && canDiscoverHeadlines(source) && source.rssFacts?.allowed);
   const responses = await Promise.allSettled(sources.map(source => read(source.feedUrl, "facts")));
   const candidates: QuickCandidate[] = [], working: string[] = [];
   responses.forEach((response, index) => {
