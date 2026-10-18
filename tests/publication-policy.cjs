@@ -38,3 +38,8 @@ test('review-flagged sources require a separate explicit acknowledgement on crea
  s.article.status='APPROVED';await assert.rejects(legacy.publishArticle(900001),/راجعت الخبر الأصلي/);assert.equal(s.writes.length,0);await legacy.publishArticle(900001,false,true);assert.equal(s.writes.length,1);
  const policy=load('lib/news-sources.ts');assert.equal(policy.sourceForDirectory(url).headlineAccess,'restricted');assert.equal(policy.requiresSourceReview('https://abc7ny.com.evil.example/story'),false);
 });
+
+test('manual create and update reject a category outside the shared navigation list before writing',async t=>{
+ const {s,editor}=fixture(t);for(const category of ['غير معروف','صحة','أخبار العالم']){const f=form();f.set('category',category);await assert.rejects(editor.createArticle(f),/قسم/);f.set('id','900001');f.set('revision','0');await assert.rejects(editor.updateArticle(f),/قسم/);}assert.equal(s.writes.length,0);
+ const f=form();f.set('category','المدارس والعائلة');f.set('intent','draft');await editor.createArticle(f);assert.equal(s.writes[0].data.category,'تعليم');
+});

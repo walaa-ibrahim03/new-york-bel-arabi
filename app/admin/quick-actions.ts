@@ -1,4 +1,5 @@
 "use server";
+import { isKnownCategory, normalizeCategory } from "../../lib/categories";
 import { auth } from "../../auth";
 import { assertNewsOperationAllowed, requireDatabaseTarget } from "../../lib/database-guard";
 import { prisma } from "../../lib/prisma";
@@ -148,14 +149,15 @@ export async function prepareQuickDraft(token: string, factsInput?: { facts: str
     reportRss(sourceId, "prepare", stats, stats.saved ? stats.shown ? "draft_ready" : "draft_saved_incomplete" : stats.skipped ? "skipped" : stage);
   }
 }
-export async function saveQuickArticle(input: {id:number;revision:number;title:string;summary:string;publish:boolean;confirmed:boolean;shortSummaryConfirmed?:boolean;sourceReviewConfirmed?:boolean}) {
+export async function saveQuickArticle(input: {id:number;revision:number;title:string;summary:string;category:string;publish:boolean;confirmed:boolean;shortSummaryConfirmed?:boolean;sourceReviewConfirmed?:boolean}) {
   try {
     await admin();
     if (!Number.isSafeInteger(input.id) || input.id<=0 || !Number.isSafeInteger(input.revision) || input.revision<0 || typeof input.publish!=="boolean" || (input.publish && input.confirmed!==true)) throw new Error("Invalid save");
+    if (typeof input.category!=="string" || !isKnownCategory(input.category, "navigation")) throw new PublicationValidationError("اختاري قسمًا من قائمة الأقسام المتاحة.");
     const existing = await prisma.article.findUnique({where:{id:input.id}});
     if (!existing || existing.status!=="DRAFT") throw new Error("Draft required");
     const data = new FormData();
-    for (const [key,value] of Object.entries({id:String(input.id),revision:String(input.revision),title:input.title,summary:input.summary,format:"minute",category:existing.category,borough:existing.borough,sourceName:existing.sourceName??"",sourceUrl:existing.sourceUrl,imageUrl:existing.imageUrl??"",intent:input.publish?"publish":"draft",publicationConfirmed:input.confirmed?"yes":"",shortSummaryConfirmed:input.shortSummaryConfirmed===true?"yes":"",sourceReviewConfirmed:input.sourceReviewConfirmed===true?"yes":""})) data.set(key,value);
+    for (const [key,value] of Object.entries({id:String(input.id),revision:String(input.revision),title:input.title,summary:input.summary,format:"minute",category:normalizeCategory(input.category),borough:existing.borough,sourceName:existing.sourceName??"",sourceUrl:existing.sourceUrl,imageUrl:existing.imageUrl??"",intent:input.publish?"publish":"draft",publicationConfirmed:input.confirmed?"yes":"",shortSummaryConfirmed:input.shortSummaryConfirmed===true?"yes":"",sourceReviewConfirmed:input.sourceReviewConfirmed===true?"yes":""})) data.set(key,value);
     await updateArticle(data,true);
     return {ok:true as const,revision:input.revision+1,published:input.publish};
   } catch (error) { return {ok:false as const,message:error instanceof PublicationValidationError ? error.message : error instanceof NewsFlowError ? flowMessage(error, "write") : "تعذر الحفظ أو النشر. راجعي التأكيد والحقول وإصدار المسودة في المحرر."}; }

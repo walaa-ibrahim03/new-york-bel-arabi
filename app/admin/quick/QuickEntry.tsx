@@ -1,4 +1,5 @@
 "use client";
+import { navigationCategories } from "../../../lib/categories";
 import Link from "next/link";
 import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { prepareEditorText } from "../assistant-actions";
@@ -156,7 +157,8 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
       <p>المصدر: {draft.sourceName}</p>
       <label className="block">عنوان الخبر<input name="title" className="input-style mt-2 w-full" required maxLength={180} value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} /></label>
       <label className="block">ملخص الخبر<textarea name="summary" className="input-style mt-2 min-h-40 w-full" required maxLength={2000} value={draft.summary} onChange={e => setDraft({ ...draft, summary: e.target.value })} /></label>
-      <input type="hidden" name="format" value="minute" /><input type="hidden" name="sourceUrl" value={draft.sourceUrl} /><input type="hidden" name="sourceName" value={draft.sourceName} /><input type="hidden" name="category" value="أخبار محلية" /><input type="hidden" name="borough" value="نيويورك" /><input type="hidden" name="imageUrl" value="" /><input type="hidden" name="publicationConfirmed" defaultValue="" />
+      <label className="block">القسم<select name="category" aria-label="القسم" defaultValue="أخبار محلية" required disabled={busy||saving||readOnly} className="input-style mt-2 w-full">{navigationCategories.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      <input type="hidden" name="format" value="minute" /><input type="hidden" name="sourceUrl" value={draft.sourceUrl} /><input type="hidden" name="sourceName" value={draft.sourceName} /><input type="hidden" name="borough" value="نيويورك" /><input type="hidden" name="imageUrl" value="" /><input type="hidden" name="publicationConfirmed" defaultValue="" />
       <input type="hidden" name="pendingOriginal" value={JSON.stringify({ title: draft.facts.split("\n")[0].slice(0, 180), summary: "", content: draft.facts, sourceUrl: draft.sourceUrl })} />
       {requiresSourceReview(draft.sourceUrl) && <label className="flex gap-2 text-sm"><input type="checkbox" name="sourceReviewConfirmed" value="yes" key={`${draft.sourceUrl}:${draft.title}:${draft.summary}`} />{sourceReviewMessage}</label>}
       <p className="text-sm">{summaryWordCount(draft.summary)} كلمة · المقترح 40–80 كلمة.</p>

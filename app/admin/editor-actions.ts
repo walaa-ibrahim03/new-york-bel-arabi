@@ -63,6 +63,7 @@ function readArticle(formData: FormData) {
   const content = formData.get("format") === "minute" ? summary : readText(formData, "content", 20000);
   const rawCategory = readText(formData, "category", 70);
   const category = normalizeCategory(rawCategory);
+  if (!isKnownCategory(category, "navigation")) throw new PublicationValidationError("اختاري قسمًا من قائمة الأقسام المتاحة.");
   const borough = readText(formData, "borough", 70);
   const sourceUrl = readText(formData, "sourceUrl", 2000);
   const imageUrl = readText(formData, "imageUrl", 2000, false);
