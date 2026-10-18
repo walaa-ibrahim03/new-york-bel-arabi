@@ -23,7 +23,57 @@ export default function SourceDiscovery({readOnly=true,origin=""}:{readOnly?:boo
 export function QuickDraft({initial,readOnly,origin}:{initial:Draft;readOnly:boolean;origin:string}) {
   const [shortSummaryConfirmed,setShortSummaryConfirmed]=useState(false);
   const [sourceReviewConfirmed,setSourceReviewConfirmed]=useState(false);
-  const[draft,setDraft]=useState(initial),[busy,setBusy]=useState(false),[published,setPublished]=useState(false),[message,setMessage]=useState("");const lock=useRef(false);
-  async function save(publish:boolean){if(lock.current||readOnly||published)return;if(publish&&!window.confirm("أؤكد مراجعة النص والأسماء والأرقام وحقوق الاستخدام. اعتماد الخبر ونشره الآن؟"))return;lock.current=true;setBusy(true);try{const r=await saveQuickArticle({...draft,publish,confirmed:publish,shortSummaryConfirmed,sourceReviewConfirmed});if(!r.ok){setMessage(r.message);return;}setDraft({...draft,revision:r.revision});setPublished(r.published);setMessage(r.published?"تم الاعتماد والنشر.":"حُفظت المسودة.");}catch{setMessage("تعذر التأكد من الحفظ؛ راجعي محرر الخبر قبل إعادة الطلب.");}finally{lock.current=false;setBusy(false);}}
-  return <article className="space-y-3 rounded-2xl border bg-white p-4" aria-label="معاينة المسودة العربية"><EditorialCover title={draft.title} category={draft.category}/><p className="text-sm">المصدر: {draft.sourceName} · {draft.category} · {published?"منشور":"مسودة فقط"}</p><label className="block">العنوان<input maxLength={180} value={draft.title} disabled={busy||published} onChange={e=>{setDraft({...draft,title:e.target.value});setSourceReviewConfirmed(false);}} className="input-style"/></label><label className="block">الملخص<textarea rows={5} maxLength={2000} value={draft.summary} disabled={busy||published} onChange={e=>{setDraft({...draft,summary:e.target.value});setSourceReviewConfirmed(false);}} className="input-style"/></label>{draft.summary.trim().split(/\s+/).length<40&&<label className="flex gap-2 text-sm"><input type="checkbox" checked={shortSummaryConfirmed} onChange={e=>setShortSummaryConfirmed(e.target.checked)}/>الوقائع محدودة؛ أؤكد الملخص القصير دون حشو.</label>}{draft.sourceUrl && requiresSourceReview(draft.sourceUrl) && <label className="flex gap-2 text-sm"><input type="checkbox" checked={sourceReviewConfirmed} disabled={busy||published} onChange={e=>setSourceReviewConfirmed(e.target.checked)}/>{sourceReviewMessage}</label>}<p className="text-xs">راجعي الحقائق قبل النشر؛ SEO مشتق تلقائيًا من النص. الأصل والرابط محفوظان في المحرر.</p><div className="flex flex-wrap gap-3"><button type="button" disabled={busy||readOnly||published} onClick={()=>save(false)} className="rounded-lg border px-4 py-3">حفظ كمسودة</button><button type="button" disabled={busy||readOnly||published} onClick={()=>save(true)} className="rounded-lg bg-green-800 px-4 py-3 font-bold text-white">نشر الآن</button><Link href={`/admin/edit/${draft.id}`} className="rounded-lg border px-4 py-3">فتح المحرر</Link></div>{message&&<p role="status">{message}</p>}<SocialKit article={draft} origin={origin} published={published}/></article>;
+  const [draft,setDraft]=useState(initial),[busy,setBusy]=useState(false),[published,setPublished]=useState(false);
+  const [confirmingPublish,setConfirmingPublish]=useState(false);
+  const [feedback,setFeedback]=useState<{text:string;error:boolean}>({text:"",error:false});
+  const lock=useRef(false);
+  const needsSourceReview=requiresSourceReview(draft.sourceUrl);
+  const shortSummary=draft.summary.trim().split(/\s+/).length<40;
+  function notice(text:string,error=false){setFeedback({text,error});}
+  function edit(field:"title"|"summary",value:string){
+    setDraft({...draft,[field]:value});setConfirmingPublish(false);setSourceReviewConfirmed(false);
+    notice(needsSourceReview?"تغيّر النص؛ أعيدي تأكيد مراجعة المصدر بعد مراجعة التعديل.":"تغيّر النص؛ راجعي المعاينة قبل النشر.");
+  }
+  function requestPublish(){
+    if(lock.current||readOnly||published)return;
+    if(needsSourceReview&&!sourceReviewConfirmed){notice("أكدي مراجعة المصدر بعد آخر تعديل للنص قبل النشر.",true);return;}
+    if(shortSummary&&!shortSummaryConfirmed){notice("أكدي أن الوقائع محدودة للسماح بنشر الملخص القصير.",true);return;}
+    setConfirmingPublish(true);notice("");
+  }
+  async function save(publish:boolean){
+    if(lock.current)return;
+    if(readOnly){notice("هذه النسخة للقراءة فقط؛ لا يمكن حفظ الخبر أو نشره.",true);return;}
+    if(published){notice("هذا الخبر منشور بالفعل.");return;}
+    if(publish&&!confirmingPublish)return;
+    lock.current=true;setBusy(true);notice(publish?"جارٍ النشر…":"جارٍ حفظ المسودة…");
+    try{
+      const r=await saveQuickArticle({...draft,publish,confirmed:publish,shortSummaryConfirmed,sourceReviewConfirmed});
+      if(!r.ok){notice(r.message,true);return;}
+      setDraft({...draft,revision:r.revision});setPublished(r.published);
+      notice(r.published?"تم الاعتماد والنشر.":"حُفظت المسودة.");
+    }catch{notice("تعذر التأكد من الحفظ؛ راجعي محرر الخبر قبل إعادة الطلب.",true);}
+    finally{lock.current=false;setBusy(false);setConfirmingPublish(false);}
+  }
+  return <article className="space-y-3 rounded-2xl border bg-white p-4" aria-label="معاينة المسودة العربية" aria-busy={busy}>
+    <EditorialCover title={draft.title} category={draft.category}/>
+    <p className="text-sm">المصدر: {draft.sourceName} · {draft.category} · {published?"منشور":"مسودة فقط"}</p>
+    <label className="block">العنوان<input maxLength={180} value={draft.title} disabled={busy||published} onChange={e=>edit("title",e.target.value)} className="input-style"/></label>
+    <label className="block">الملخص<textarea rows={5} maxLength={2000} value={draft.summary} disabled={busy||published} onChange={e=>edit("summary",e.target.value)} className="input-style"/></label>
+    {shortSummary&&<label className="flex gap-2 text-sm"><input type="checkbox" checked={shortSummaryConfirmed} disabled={busy||published} onChange={e=>{setShortSummaryConfirmed(e.target.checked);setConfirmingPublish(false);}}/>الوقائع محدودة؛ أؤكد الملخص القصير دون حشو.</label>}
+    {needsSourceReview&&<label className="flex gap-2 text-sm"><input type="checkbox" checked={sourceReviewConfirmed} disabled={busy||published} onChange={e=>{setSourceReviewConfirmed(e.target.checked);setConfirmingPublish(false);}}/>{sourceReviewMessage}</label>}
+    <p className="text-xs">راجعي الحقائق قبل النشر؛ SEO مشتق تلقائيًا من النص. الأصل والرابط محفوظان في المحرر.</p>
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-3">
+        <button type="button" disabled={busy||readOnly||published} onClick={()=>save(false)} className="rounded-lg border px-4 py-3">{busy&&!confirmingPublish?"جارٍ الحفظ…":"حفظ كمسودة"}</button>
+        <button type="button" disabled={busy||readOnly||published||confirmingPublish} onClick={requestPublish} className="rounded-lg bg-green-800 px-4 py-3 font-bold text-white">{busy&&confirmingPublish?"جارٍ النشر…":"نشر الآن"}</button>
+        <Link href={`/admin/edit/${draft.id}`} className="rounded-lg border px-4 py-3">فتح المحرر</Link>
+      </div>
+      {confirmingPublish&&<div className="space-y-3 rounded-lg border border-amber-400 bg-amber-50 p-3" role="group" aria-label="تأكيد نشر المسودة">
+        <p>أؤكد مراجعة النص والأسماء والأرقام وحقوق الاستخدام. هل تريدين اعتماد الخبر ونشره الآن؟</p>
+        <div className="flex flex-wrap gap-3"><button type="button" disabled={busy||readOnly||published} onClick={()=>save(true)} className="rounded-lg bg-green-800 px-4 py-3 font-bold text-white">{busy?"جارٍ النشر…":"تأكيد النشر"}</button><button type="button" disabled={busy} onClick={()=>setConfirmingPublish(false)} className="rounded-lg border px-4 py-3">إلغاء</button></div>
+      </div>}
+      {feedback.text&&<p role={feedback.error?"alert":"status"} aria-live="polite" className={`whitespace-pre-wrap rounded-lg border p-3 font-bold leading-7 ${feedback.error?"border-red-300 bg-red-50 text-red-900":"border-green-300 bg-green-50 text-green-900"}`}>{feedback.text}</p>}
+    </div>
+    <SocialKit article={draft} origin={origin} published={published}/>
+  </article>;
 }
