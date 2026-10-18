@@ -104,3 +104,8 @@ test('preparation failures are visible beside the selected action, preserve fail
  nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة').props.onClick();await f.flush();nodes=f.render();assert.ok(nodes.some(n=>n.props?.role==='alert'&&String(n.props.children).includes('صلاحيات الوصول')));assert.ok(nodes.some(n=>n.props?.href==='/admin/edit/990002'));assert.equal(nodes.find(n=>n.type==='input'&&n.props.type==='checkbox').props.checked,true);assert.equal(nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة').props['aria-busy'],false);
  f.setPrepareResponse(()=>{throw Error('Private server error');});nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة').props.onClick();await f.flush();nodes=f.render();assert.ok(nodes.some(n=>n.props?.role==='alert'&&String(n.props.children).includes('تعذر الاتصال بالخادم')));assert.equal(JSON.stringify(nodes).includes('Private server error'),false);
 });
+
+test('manual minute form and extended editor use exactly the shared six section choices',()=>{
+ const c=load('lib/categories.ts');assert.equal(c.navigationCategories.length,6);assert.equal(c.editorCategory('الهجرة'),'الهجرة والإقامة');assert.equal(c.editorCategory('تعليم'),'تعليم');assert.equal(c.editorCategory('صحة'),'صحة');
+ for(const file of ['app/admin/quick/QuickEntry.tsx','app/admin/ArticleForm.tsx']){const s=fs.readFileSync(file,'utf8');assert.match(s,/name="category"/);assert.match(s,/navigationCategories\.map/);assert.ok(!/type="hidden" name="category"/.test(s));}
+});

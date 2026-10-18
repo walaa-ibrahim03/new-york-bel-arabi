@@ -3,10 +3,13 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { articlePath } from "../lib/news-seo";
 import { trendingNews } from "../lib/news-trends";
-import { normalizeCategory } from "../lib/categories";
+import { navigationCategories, normalizeCategory } from "../lib/categories";
 import { prisma } from "../lib/prisma";
 
 export const instant = false;
+
+// Set to true to restore both topic-navigation panels. News sections stay visible.
+const SHOW_TOPIC_PANELS = false;
 
 const sections = [
   {
@@ -141,9 +144,7 @@ export default async function Home() {
       priorityCategories.includes(normalizeCategory(article.category))
     ) ?? articles[0];
 
-  const latestArticles = articles
-    .filter((article) => article.id !== featured?.id)
-    .slice(0, 6);
+  const latestArticles = articles.slice(0, 6);
 
   return (
     <div
@@ -179,24 +180,7 @@ export default async function Home() {
           className="border-t border-slate-100"
         >
           <div className="mx-auto flex max-w-7xl flex-wrap gap-x-6 gap-y-3 px-5 py-4 text-sm font-semibold sm:px-8">
-            <a href="#home" className="hover:text-amber-700">
-              الرئيسية
-            </a>
-            <a href="#immigration" className="hover:text-amber-700">
-              الهجرة
-            </a>
-            <a href="#benefits" className="hover:text-amber-700">
-              المساعدات
-            </a>
-            <a href="#community" className="hover:text-amber-700">
-              الجالية
-            </a>
-            <a href="#family" className="hover:text-amber-700">
-              المدارس والعائلة
-            </a>
-            <a href="#latest" className="hover:text-amber-700">
-              آخر الأخبار
-            </a>
+            {navigationCategories.map(item => <a key={item.href} href={item.href} className="hover:text-amber-700">{item.label}</a>)}
           </div>
         </nav>
       </header>
@@ -206,7 +190,7 @@ export default async function Home() {
         className="mx-auto max-w-7xl px-5 pb-20 sm:px-8"
       >
         {/* Featured */}
-        <section className="grid gap-6 py-10 lg:grid-cols-[1.65fr_1fr]">
+        <section className={`grid gap-6 py-10 ${SHOW_TOPIC_PANELS ? "lg:grid-cols-[1.65fr_1fr]" : ""}`}>
           <div className="flex min-h-[350px] flex-col justify-end rounded-3xl bg-slate-950 p-7 text-white sm:p-10">
             <span className="mb-5 w-fit rounded-full bg-amber-400 px-4 py-1.5 text-xs font-bold text-slate-950">
               {featured ? "أبرز الأخبار" : "مرحبًا بكم"}
@@ -255,7 +239,7 @@ export default async function Home() {
           </div>
 
           {/* Focus areas */}
-          <aside className="rounded-3xl border border-slate-200 bg-white p-6">
+          {SHOW_TOPIC_PANELS && <aside className="rounded-3xl border border-slate-200 bg-white p-6">
             <div className="mb-6">
               <h2 className="text-xl font-black">
                 المواضيع التي تهمنا
@@ -286,7 +270,7 @@ export default async function Home() {
                 </a>
               ))}
             </div>
-          </aside>
+          </aside>}
         </section>
 
         <section aria-label="الأكثر تداولًا الآن" className="my-8 rounded-3xl border border-slate-200 bg-white p-6">
@@ -296,7 +280,7 @@ export default async function Home() {
           {trendItems.length ? <ul className="mt-4 grid gap-3 sm:grid-cols-2">{trendItems.map(({ article, mentions }) => <li key={article.id}><Link className="font-bold text-amber-800 underline" href={articlePath(article)}>{article.title}</Link><p className="text-xs text-slate-500">{mentions > 1 ? `${mentions} تغطيات لدينا` : "اختيار المحرر"}</p></li>)}</ul> : <p className="mt-4 text-sm">لا توجد إشارات تداول كافية حاليًا. تابعي أحدث الأخبار أدناه.</p>}
         </section>
         {/* Quick topic tiles */}
-        <section
+        {SHOW_TOPIC_PANELS && <section
           aria-label="أقسام الموقع"
           className="grid gap-4 py-5 sm:grid-cols-2 lg:grid-cols-4"
         >
@@ -320,7 +304,7 @@ export default async function Home() {
               </span>
             </a>
           ))}
-        </section>
+        </section>}
 
         {/* Sections - published articles only */}
         {sections.map((section) => {

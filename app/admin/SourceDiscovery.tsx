@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { navigationCategories, editorCategory, isKnownCategory } from "../../lib/categories";
 import Link from "next/link";
 import { sourceDirectory, discoveryEditorLink } from "../../lib/source-directory";
 import { sourceForDirectory, canDiscoverHeadlines, requiresSourceReview, sourceReviewMessage } from "../../lib/news-sources";
@@ -23,7 +24,7 @@ export default function SourceDiscovery({readOnly=true,origin=""}:{readOnly?:boo
 export function QuickDraft({initial,readOnly,origin}:{initial:Draft;readOnly:boolean;origin:string}) {
   const [shortSummaryConfirmed,setShortSummaryConfirmed]=useState(false);
   const [sourceReviewConfirmed,setSourceReviewConfirmed]=useState(false);
-  const [draft,setDraft]=useState(initial),[busy,setBusy]=useState(false),[published,setPublished]=useState(false);
+  const [draft,setDraft]=useState({...initial,category:editorCategory(initial.category)}),[busy,setBusy]=useState(false),[published,setPublished]=useState(false);
   const [confirmingPublish,setConfirmingPublish]=useState(false);
   const [feedback,setFeedback]=useState<{text:string;error:boolean}>({text:"",error:false});
   const lock=useRef(false);
@@ -61,6 +62,7 @@ export function QuickDraft({initial,readOnly,origin}:{initial:Draft;readOnly:boo
     <label className="block">الملخص<textarea rows={5} maxLength={2000} value={draft.summary} disabled={busy||published} onChange={e=>edit("summary",e.target.value)} className="input-style"/></label>
     {shortSummary&&<label className="flex gap-2 text-sm"><input type="checkbox" checked={shortSummaryConfirmed} disabled={busy||published} onChange={e=>{setShortSummaryConfirmed(e.target.checked);setConfirmingPublish(false);}}/>الوقائع محدودة؛ أؤكد الملخص القصير دون حشو.</label>}
     {needsSourceReview&&<label className="flex gap-2 text-sm"><input type="checkbox" checked={sourceReviewConfirmed} disabled={busy||published} onChange={e=>{setSourceReviewConfirmed(e.target.checked);setConfirmingPublish(false);}}/>{sourceReviewMessage}</label>}
+    <label className="block">القسم<select aria-label="القسم" value={draft.category} disabled={busy||published||readOnly} onChange={e=>{setDraft({...draft,category:e.target.value});setConfirmingPublish(false);}} className="input-style">{!isKnownCategory(draft.category,"navigation")&&<option value={draft.category} disabled>القسم الحالي: {draft.category} — اختاري قسمًا من القائمة</option>}{navigationCategories.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
     <p className="text-xs">راجعي الحقائق قبل النشر؛ SEO مشتق تلقائيًا من النص. الأصل والرابط محفوظان في المحرر.</p>
     <div className="space-y-3">
       <div className="flex flex-wrap gap-3">

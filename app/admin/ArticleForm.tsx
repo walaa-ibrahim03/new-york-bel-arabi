@@ -2,7 +2,7 @@
 "use client";
 
 import { requiresSourceReview, sourceReviewMessage } from "../../lib/news-sources";
-import { categories, normalizeCategory } from "../../lib/categories";
+import { navigationCategories, editorCategory, isKnownCategory } from "../../lib/categories";
 import Link from "next/link";
 import { useActionState, useRef, useState, useTransition } from "react";
 import {
@@ -49,7 +49,7 @@ export default function ArticleForm({
   const [content, setContent] = useState(article?.content ?? "");
   const [sourceName, setSourceName] = useState(article?.sourceName ?? discoverySource?.name ?? "");
   const [sourceUrl, setSourceUrl] = useState(article?.sourceUrl ?? discoverySource?.url ?? "");
-  const [category, setCategory] = useState(normalizeCategory(article?.category ?? "عام"));
+  const [category, setCategory] = useState(editorCategory(article?.category ?? "أخبار محلية"));
   const [borough, setBorough] = useState(article?.borough ?? "نيويورك");
   const [imageUrl, setImageUrl] = useState(article?.imageUrl ?? "");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -247,8 +247,9 @@ export default function ArticleForm({
                 value={category} onChange={event => setCategory(event.target.value)}
                 className="input-style"
               >
-                {[...new Set([...categories, ...(article ? [normalizeCategory(article.category)] : [])])].map((category) => (
-                  <option key={category} value={category}>{category}</option>
+                {!isKnownCategory(category,"navigation") && <option value={category} disabled>القسم الحالي: {category} — اختاري قسمًا من القائمة</option>}
+                {navigationCategories.map(item => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
                 ))}
               </select>
             </Field>
