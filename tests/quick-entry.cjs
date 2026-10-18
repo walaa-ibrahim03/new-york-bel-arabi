@@ -1,6 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Offline fixtures only. */
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
-function load(file){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(id=>load(path.resolve(path.dirname(file),id)+'.ts'),m,m.exports);return m.exports;}
+function load(file,mocks={}){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText)(id=>{
+ if(Object.hasOwn(mocks,id))return mocks[id];
+ if(id==='react/jsx-runtime')return require(id);
+ if(id.startsWith('.')){const base=path.resolve(path.dirname(file),id);return load(fs.existsSync(base+'.ts')?base+'.ts':base+'.tsx',mocks);}
+ throw Error('External access blocked: '+id);
+},m,m.exports);return m.exports;}
 test('quick entry validates public URLs and preserves fictional facts without fetching',()=>{
  const {quickEntryInput}=load('lib/quick-entry.ts'); const facts='Fictional school programme opens 20 places on 17 October.';
  for(const [host,name] of [['abc7ny.com','ABC7NY'],['www.nbcnewyork.com','NBC New York'],['brooklyn.news12.com','News 12'],['www.silive.com','SILive / Staten Island Advance']]){
@@ -40,7 +45,7 @@ test('headline discovery treats access policy as a flag; unknown and technically
  assert.throws(()=>p.requireDiscoverySource('https://evil.example/feed'));
 });
 
-function refreshFixture(t) {
+function refreshFixture(t,{readOnly=true}={}) {
  const React=require('react'),slots=[],effects=[],timers=new Map(),tasks=[],calls=[];let cursor=0,now=1_000_000,nextTimer=0;
  const previousWindow=global.window,previousDocument=global.document,previousNow=Date.now;
  const page={visibilityState:'visible'};global.document=page;Date.now=()=>now;
@@ -54,14 +59,15 @@ function refreshFixture(t) {
   useTransition:()=>{const i=cursor++;const s=slots[i]??(slots[i]={pending:false});s.start??=(fn)=>{s.pending=true;const promise=Promise.resolve(fn()).finally(()=>{s.pending=false;});tasks.push(promise);};return[s.pending,s.start];},
   useActionState:()=>{cursor++;return[{error:''},()=>{throw Error('No saves');},false];},
  };
+ const prepareCalls=[];let prepareResponse=()=>{throw Error('No draft preparation');};
  let response=()=>({ok:true,items:[{title:'Fictional Brooklyn headline',source:'Fictional source',url:'https://abc7ny.com/fixture',date:'2030-01-01T00:00:00Z',token:'fictional-token'}]});
- const m={exports:{}},mocks={react:hooks,'react/jsx-runtime':require('react/jsx-runtime'),'next/link':{__esModule:true,default:'a'},'../assistant-actions':{prepareEditorText:()=>{throw Error('No AI');}},'../editor-actions':{saveArticle:()=>{throw Error('No writes');}},'../quick-actions':{searchQuickNews:async(url,section)=>{calls.push({url,section});return response();},prepareQuickDraft:()=>{throw Error('No draft preparation');}},'../SourceDiscovery':{QuickDraft:()=>null}};
+ const m={exports:{}},mocks={react:hooks,'react/jsx-runtime':require('react/jsx-runtime'),'next/link':{__esModule:true,default:'a'},'../assistant-actions':{prepareEditorText:()=>{throw Error('No AI');}},'../editor-actions':{saveArticle:()=>{throw Error('No writes');}},'../quick-actions':{searchQuickNews:async(url,section)=>{calls.push({url,section});return response();},prepareQuickDraft:async token=>{prepareCalls.push(token);return prepareResponse(token);}},'../SourceDiscovery':{QuickDraft:()=>null}};
  new Function('require','module','exports',ts.transpileModule(fs.readFileSync('app/admin/quick/QuickEntry.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText)(id=>Object.hasOwn(mocks,id)?mocks[id]:load(path.resolve('app/admin/quick',id)+'.ts'),m,m.exports);
  function all(node){if(!node||typeof node!=='object')return[];return[node,...[node.props?.children].flat(Infinity).flatMap(all)];}
- function render(){cursor=0;const nodes=all(m.exports.default({readOnly:true,source:{name:'ABC7NY',url:'https://abc7ny.com/'}}));effects.splice(0).forEach(fn=>fn());return nodes;}
+ function render(){cursor=0;const nodes=all(m.exports.default({readOnly,source:{name:'ABC7NY',url:'https://abc7ny.com/'}}));effects.splice(0).forEach(fn=>fn());return nodes;}
  function dispose(){slots.forEach(s=>s?.cleanup?.());}
  t.after(()=>{dispose();global.window=previousWindow;global.document=previousDocument;Date.now=previousNow;});
- return {calls,page,render,dispose,timers,setResponse:fn=>{response=fn;},run:ms=>{now+=ms;for(const timer of [...timers.values()])if(now>=timer.due){timer.due=now+timer.period;timer.fn();}},flush:async()=>{while(tasks.length)await Promise.all(tasks.splice(0));}};
+ return {calls,prepareCalls,page,render,dispose,timers,setPrepareResponse:fn=>{prepareResponse=fn;},setResponse:fn=>{response=fn;},run:ms=>{now+=ms;for(const timer of [...timers.values()])if(now>=timer.due){timer.due=now+timer.period;timer.fn();}},flush:async()=>{while(tasks.length)await Promise.all(tasks.splice(0));}};
 }
 test('QuickEntry refreshes only selected-source metadata every ten minutes while visible; throttles manual requests and preserves selections',async t=>{
  const f=refreshFixture(t);let nodes=f.render();assert.equal(f.calls.length,0);f.run(599999);await f.flush();assert.equal(f.calls.length,0);f.run(1);await f.flush();nodes=f.render();assert.equal(f.calls.length,1);assert.equal(f.calls[0].url,'https://abc7ny.com/');
@@ -79,4 +85,22 @@ test('HTTP or redirect error stops automatic refresh per source until a successf
 });
 test('refresh requests never overlap and cleanup ignores a late result after unmount',async t=>{
  const f=refreshFixture(t);let resolve;f.setResponse(()=>new Promise(done=>{resolve=done;}));f.render();f.run(600000);assert.equal(f.calls.length,1);f.render();f.run(600000);assert.equal(f.calls.length,1);f.dispose();resolve({ok:true,items:[]});await f.flush();assert.equal(f.timers.size,0);
+});
+
+test('quick route waits for request-time connection before auth and reads the current write mode',async t=>{
+ const old=process.env.ADMIN_EMAIL;process.env.ADMIN_EMAIL='admin@example.org';t.after(()=>{if(old===undefined)delete process.env.ADMIN_EMAIL;else process.env.ADMIN_EMAIL=old;});
+ let release,authCalls=0,readonly=false;const gate=new Promise(resolve=>{release=resolve;});
+ const C=load('app/admin/quick/page.tsx',{'next/server':{connection:()=>gate},'../../../auth':{auth:async()=>{authCalls++;return{user:{email:'admin@example.org'}};}},'next/navigation':{redirect:()=>{throw Error('Redirect');}},'../../../lib/database-guard':{isNewsReadOnly:()=>readonly},'./QuickEntry':{__esModule:true,default:()=>null}}).default;
+ const pending=C({searchParams:Promise.resolve({source:'abc7ny'})});assert.equal(authCalls,0);release();const writable=await pending;assert.equal(authCalls,1);assert.equal(writable.props.readOnly,false);assert.equal(writable.props.source.name,'ABC7NY');readonly=true;const protectedPage=await C({searchParams:Promise.resolve({})});assert.equal(protectedPage.props.readOnly,true);
+});
+test('selected preparation shows immediate progress, prevents overlap and renders the Arabic draft without publishing',async t=>{
+ const f=refreshFixture(t,{readOnly:false});let nodes=f.render();f.run(600000);await f.flush();nodes=f.render();nodes.find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});nodes=f.render();let release;f.setPrepareResponse(()=>new Promise(resolve=>{release=resolve;}));
+ nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة').props.onClick();nodes=f.render();const button=nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة');assert.equal(button.props['aria-busy'],true);assert.equal(button.props.disabled,true);assert.match(button.props.children,/جارٍ التجهيز/);assert.equal(f.prepareCalls.length,1);
+ f.run(600000);assert.equal(f.calls.length,1);assert.equal(f.prepareCalls.length,1);
+ release({ok:true,draft:{id:990001,revision:1,title:'خبر خيالي عربي واضح',summary:'ملخص خيالي للمراجعة فقط',category:'عام',sourceName:'ABC7NY',sourceUrl:'https://abc7ny.com/fixture'}});await f.flush();nodes=f.render();assert.equal(nodes.filter(n=>n.props?.initial?.id===990001).length,1);assert.ok(nodes.some(n=>n.props?.role==='status'&&String(n.props.children).includes('لم يُنشر شيء')));assert.equal(f.prepareCalls.length,1);
+});
+test('preparation failures are visible beside the selected action, preserve failed selections and link any saved original draft',async t=>{
+ const f=refreshFixture(t,{readOnly:false});let nodes=f.render();f.run(600000);await f.flush();nodes=f.render();nodes.find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});nodes=f.render();f.setPrepareResponse(()=>({ok:false,id:990002,stop:true,message:'رفضت خدمة الذكاء الاصطناعي الطلب بسبب صلاحيات الوصول أو المصادقة.'}));
+ nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة').props.onClick();await f.flush();nodes=f.render();assert.ok(nodes.some(n=>n.props?.role==='alert'&&String(n.props.children).includes('صلاحيات الوصول')));assert.ok(nodes.some(n=>n.props?.href==='/admin/edit/990002'));assert.equal(nodes.find(n=>n.type==='input'&&n.props.type==='checkbox').props.checked,true);assert.equal(nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة').props['aria-busy'],false);
+ f.setPrepareResponse(()=>{throw Error('Private server error');});nodes.find(n=>n.type==='button'&&n.props['aria-label']==='تجهيز المسودات المختارة').props.onClick();await f.flush();nodes=f.render();assert.ok(nodes.some(n=>n.props?.role==='alert'&&String(n.props.children).includes('تعذر الاتصال بالخادم')));assert.equal(JSON.stringify(nodes).includes('Private server error'),false);
 });

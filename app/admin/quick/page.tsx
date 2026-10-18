@@ -1,11 +1,13 @@
 import { auth } from "../../../auth";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { isNewsReadOnly } from "../../../lib/database-guard";
 import { selectedLocalSource } from "../../../lib/local-news-sources";
 import QuickEntry from "./QuickEntry";
 
 export const instant = false;
 export default async function QuickEntryPage({ searchParams }: { searchParams: Promise<{ source?: string }> }) {
+  await connection();
   const session = await auth();
   const admin = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   if (!admin || session?.user?.email?.trim().toLowerCase() !== admin) redirect("/");
