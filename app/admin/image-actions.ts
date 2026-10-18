@@ -15,6 +15,7 @@ export async function uploadArticleImage(formData: FormData) {
   if (process.env.NYBA_DATABASE_PROFILE === "isolated-test" || process.env.NYBA_IMAGE_UPLOADS_ENABLED !== "true" || !process.env.BLOB_READ_WRITE_TOKEN || !/^[a-z0-9-]+\.public\.blob\.vercel-storage\.com$/.test(process.env.NYBA_PUBLIC_BLOB_HOST ?? "")) {
     return { ok: false as const, message: "رفع الصور غير مفعّل لهذه النسخة. يمكنك استخدام رابط صورة تملكين حق استخدامها." };
   }
+  if (formData.get("imageRightsConfirmed") !== "yes") return { ok: false as const, message: "أكدي أنك تملكين حق استخدام الصورة قبل رفعها." };
   const file = formData.get("image");
   if (!(file instanceof File)) return { ok: false as const, message: "اختاري صورة JPEG أو PNG أو WebP حتى 2 ميغابايت." };
   try {
