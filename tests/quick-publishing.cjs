@@ -142,3 +142,15 @@ test('legacy import diagnostics report actual draft saves and separate skip reas
  try{console.info=(tag,json)=>{if(tag==='[rss-diagnostic]')logs.push(JSON.parse(json));};await importer.importRSS({feedUrl:source.feedUrl});}finally{console.info=original;}
  assert.equal(saved.length,2);assert.ok(saved.every(row=>row.status==='DRAFT'));assert.equal(logs.length,1);assert.equal(logs[0].read,9);assert.equal(logs[0].saved,2);assert.equal(logs[0].skipped,7);assert.deepEqual(logs[0].reasons,{duplicate:2,invalid_url:1,wrong_host:1,missing_fields:1,invalid_text:1,invalid_date:1});assert.ok(!JSON.stringify(logs).includes('https://'));
 });
+test('redirect exhaustion has its own error kind and an actionable Arabic message',async t=>{
+ env(t);const diag=load('lib/rss-diagnostics.ts'),failure=diag.rssReadError(Error('Too many redirects'));assert.equal(failure.kind,'redirect');assert.equal(failure.httpStatus,undefined);
+ const api=load('app/admin/quick-actions.ts',{'../../auth':{auth:async()=>({user:{email:'admin@example.org'}})},'../../lib/database-guard':{requireDatabaseTarget:()=>{},assertNewsOperationAllowed:()=>{}},'../../lib/rss-diagnostics':diag,'../../lib/prisma':{prisma:{}},'../../lib/rss':{fetchRSS:async()=>{throw failure;}},'../../lib/translate-news':{translateNewsToArabic:()=>{throw Error('No AI');}},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{},unstable_rethrow:()=>{}}});
+ const result=await api.searchQuickNews('https://abc7ny.com/','ny');assert.equal(result.ok,false);assert.equal(result.errorKind,'redirect');assert.match(result.message,/كثرة تحويلات/);
+});
+test('quick draft saves remain permitted while flagged-source publication requires a separate boolean acknowledgement',async t=>{
+ const{api,state}=harness(t);const summary=Array(8).fill('وقائع خيالية واضحة للاختبار فقط').join(' ');
+ state.rows.push({id:999001,revision:0,status:'DRAFT',title:'عنوان خيالي عربي واضح',summary,category:'عام',borough:'نيويورك',sourceName:'ABC7NY',sourceUrl:'https://abc7ny.com/fictional',originalTitle:'Fictional original',originalContent:'Fictional facts'});
+ let input={id:999001,revision:0,title:'عنوان خيالي عربي واضح',summary,publish:true,confirmed:true};assert.equal((await api.saveQuickArticle(input)).ok,false);assert.equal(state.writes,0);
+ assert.equal((await api.saveQuickArticle({...input,publish:false})).ok,true);assert.equal(state.rows[0].status,'DRAFT');input={...input,revision:1};assert.equal((await api.saveQuickArticle({...input,sourceReviewConfirmed:'yes'})).ok,false);assert.equal(state.writes,1);
+ assert.equal((await api.saveQuickArticle({...input,sourceReviewConfirmed:true})).ok,true);assert.equal(state.rows[0].status,'PUBLISHED');assert.equal(state.rows[0].approvedBy,'admin@example.org');assert.equal(state.rows[0].originalContent,'Fictional facts');
+});

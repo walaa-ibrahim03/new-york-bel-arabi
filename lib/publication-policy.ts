@@ -1,6 +1,10 @@
 // One server-side policy for every transition into PUBLISHED. Originals are untouched.
+import { requiresSourceReview, sourceReviewMessage } from "./news-sources";
 export class PublicationValidationError extends Error {
   readonly code = "PUBLICATION_VALIDATION";
+}
+export function validateSourceReview(sourceUrl: string, confirmed = false): void {
+  if (requiresSourceReview(sourceUrl) && confirmed !== true) throw new PublicationValidationError(sourceReviewMessage);
 }
 export function summaryWordCount(text: string): number {
   return text.trim().split(/\s+/u).filter(word => /\p{L}|\p{N}/u.test(word)).length;

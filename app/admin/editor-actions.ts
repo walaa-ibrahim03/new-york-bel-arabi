@@ -1,7 +1,7 @@
 
 "use server";
 
-import { validatePublication, PublicationValidationError } from "../../lib/publication-policy";
+import { validatePublication, validateSourceReview, PublicationValidationError } from "../../lib/publication-policy";
 import { normalizeCategory, isKnownCategory } from "../../lib/categories";
 import { validateWebUrl, validateEditorialArticle } from "../../lib/article-policy";
 import { assertNewsOperationAllowed, isNewsReadOnly } from "../../lib/database-guard";
@@ -89,6 +89,7 @@ function saveState(formData: FormData, data: ReturnType<typeof readArticle>, adm
   if (intent !== "draft") validateEditorialArticle(data);
   if (intent === "publish") {
     if (formData.get("publicationConfirmed") !== "yes") throw new Error("أكدي مراجعة النص والحقائق وحقوق النشر قبل النشر.");
+    validateSourceReview(data.sourceUrl, formData.get("sourceReviewConfirmed") === "yes");
     validatePublication(data, formData.get("shortSummaryConfirmed") === "yes");
     const now = new Date();
     return { status: "PUBLISHED", reviewedAt: now, reviewedBy: admin, approvedAt: now, approvedBy: admin, publishedAt: now };

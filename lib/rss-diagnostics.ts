@@ -13,7 +13,7 @@ export function reportRss(sourceId: string, phase: "discovery" | "import" | "pre
   console.info("[rss-diagnostic]", JSON.stringify({ sourceId, phase, outcome, ...stats, ...(httpStatus ? { httpStatus } : {}) }));
 }
 export class RssReadError extends Error {
-  constructor(public readonly kind: "http" | "timeout" | "network_or_parse", public readonly httpStatus?: number) {
+  constructor(public readonly kind: "http" | "redirect" | "timeout" | "network_or_parse", public readonly httpStatus?: number) {
     super("RSS read failed");
   }
 }
@@ -25,6 +25,7 @@ export function rssReadError(error: unknown): RssReadError {
   // rss-parser 3.x uses these exact messages instead of a typed HTTP/timeout error.
   // Extract only the numeric status; never expose or log the original message.
   const value = error as { statusCode?: unknown; name?: unknown; code?: unknown; message?: unknown } | null;
+  if (value?.message === "Too many redirects") return new RssReadError("redirect");
   const parserStatus = typeof value?.message === "string" ? /^Status code ([3-5]\d{2})$/.exec(value.message) : null;
   const status = parserStatus ? Number(parserStatus[1]) : value?.statusCode;
   if (typeof status === "number" && Number.isInteger(status) && status >= 300 && status <= 599) return new RssReadError("http", status);

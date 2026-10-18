@@ -1,7 +1,7 @@
 
 "use server";
 
-import { validatePublication } from "../../lib/publication-policy";
+import { validatePublication, validateSourceReview } from "../../lib/publication-policy";
 import { recordDeletionAudit } from "../../lib/deletion-audit";
 import { canPublish, validateArticleId, validateEditorialArticle } from "../../lib/article-policy";
 import { assertNewsOperationAllowed, isNewsReadOnly } from "../../lib/database-guard";
@@ -34,13 +34,14 @@ function refreshArticle(id: number) {
   revalidatePath("/news-sitemap.xml");
 }
 
-async function transitionArticle(id: number, from: string, to: string, shortSummaryConfirmed = false) {
+async function transitionArticle(id: number, from: string, to: string, shortSummaryConfirmed = false, sourceReviewConfirmed = false) {
   const email = await requireAdmin();
   validateArticleId(id);
   const article = await prisma.article.findUnique({ where: { id } });
   if (!article || article.status !== from) throw new Error("مرحلة الخبر لا تسمح بهذه العملية.");
   if (to !== "DRAFT") validateEditorialArticle(article);
   if (to === "PUBLISHED") validatePublication(article, shortSummaryConfirmed);
+  if (to === "PUBLISHED") validateSourceReview(article.sourceUrl, sourceReviewConfirmed);
   if (to === "PUBLISHED" && !canPublish(article)) throw new Error("يجب اعتماد الخبر قبل النشر.");
   const result = await prisma.article.updateMany({
     where: { id, status: from, revision: article.revision },
@@ -63,18 +64,19 @@ export async function submitArticleForReview(id: number) {
 export async function approveArticle(id: number) {
   await transitionArticle(id, "IN_REVIEW", "APPROVED");
 }
-export async function publishArticle(id: number, shortSummaryConfirmed = false) {
-  await transitionArticle(id, "APPROVED", "PUBLISHED", shortSummaryConfirmed);
+export async function publishArticle(id: number, shortSummaryConfirmed = false, sourceReviewConfirmed = false) {
+  await transitionArticle(id, "APPROVED", "PUBLISHED", shortSummaryConfirmed, sourceReviewConfirmed);
 }
-export async function approveAndPublishArticle(id: number, shortSummaryConfirmed = false) {
+export async function approveAndPublishArticle(id: number, shortSummaryConfirmed = false, sourceReviewConfirmed = false) {
   // Explicit admin review shortcut; draft -> published remains forbidden.
   await requireAdmin();
   validateArticleId(id);
   const candidate = await prisma.article.findUnique({ where: { id } });
   if (!candidate) throw new Error("الخبر غير موجود.");
   validatePublication(candidate, shortSummaryConfirmed);
+  validateSourceReview(candidate.sourceUrl, sourceReviewConfirmed);
   await transitionArticle(id, "IN_REVIEW", "APPROVED");
-  await transitionArticle(id, "APPROVED", "PUBLISHED", shortSummaryConfirmed);
+  await transitionArticle(id, "APPROVED", "PUBLISHED", shortSummaryConfirmed, sourceReviewConfirmed);
 }
 export async function unpublishArticle(id: number) {
   await transitionArticle(id, "PUBLISHED", "DRAFT");

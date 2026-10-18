@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { prepareEditorText } from "../assistant-actions";
 import { saveArticle } from "../editor-actions";
 import { localNewsSources } from "../../../lib/local-news-sources";
 import { summaryWordCount } from "../../../lib/publication-policy";
-import { sourceForDirectory, canDiscoverHeadlines } from "../../../lib/news-sources";
+import { sourceForDirectory, canDiscoverHeadlines, requiresSourceReview, sourceReviewMessage } from "../../../lib/news-sources";
 import { searchQuickNews, prepareQuickDraft } from "../quick-actions";
 import { QuickDraft } from "../SourceDiscovery";
 import { quickEntryInput } from "../../../lib/quick-entry";
@@ -16,12 +16,7 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
   const available = canDiscoverHeadlines(selectedSource ? sourceForDirectory(selectedSource.url) : undefined);
   const [headlines,setHeadlines] = useState<{title:string;source:string;date:string;url:string;token:string}[]>([]);
   const [checked,setChecked] = useState<string[]>([]);
-  const [prepared,setPrepared] = useState<{id:number;revision:number;title:string;summary:string;category:string;sourceName:string}[]>([]);
-  async function discover() {
-    if (!available || !selectedSource || locked.current) return;
-    locked.current=true; setError(""); setHeadlines([]); setChecked([]);
-    start(async()=>{try { const result=await searchQuickNews(selectedSource.url,"ny"); if(result.ok) {setHeadlines(result.items); if(!result.items.length)setError("لا توجد عناوين حديثة غير محفوظة حاليًا.");} else setError(result.message); } catch {setError("تعذر جلب العناوين؛ لم يُحفظ شيء.");} finally {locked.current=false;} });
-  }
+  const [prepared,setPrepared] = useState<{id:number;revision:number;title:string;summary:string;category:string;sourceName:string;sourceUrl:string}[]>([]);
   function prepareSelected() {
     if(readOnly || !available || locked.current || !checked.length)return; locked.current=true;setError("");
     start(async()=>{try {for(const item of headlines.filter(row=>checked.includes(row.token))) {const result=await prepareQuickDraft(item.token); if(!result.ok){setError(result.message);break;} setPrepared(rows=>[...rows,result.draft]); setHeadlines(rows=>rows.filter(row=>row.token!==item.token));}setChecked([]);}catch{setError("تعذر استكمال التجهيز؛ راجعي المسودات قبل إعادة المحاولة.");}finally{locked.current=false;} });
@@ -37,6 +32,10 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
   const previous = useRef<{ key: string; title: string; summary: string } | null>(null);
   const [saved, save, saving] = useActionState(saveArticle, { error: "" });
   const form = useRef<HTMLFormElement>(null);
+  const lastRequest = useRef<number | null>(null);
+  const [httpPaused, setHttpPaused] = useState<Record<string, boolean>>({});
+  const mounted = useRef(false);
+  const selectionVersion = useRef(0);
   function prepare() {
     if (readOnly || locked.current || busy || saving) return;
     setError("");
@@ -56,12 +55,51 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
       finally { locked.current = false; }
     });
   }
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const discover = useCallback((automatic = false) => {
+    if (!available || !selectedSource || locked.current || busy || saving) return;
+    if (automatic && (document.visibilityState !== "visible" || httpPaused[selectedSource.id] || checked.length > 0)) return;
+    const now = Date.now();
+    // Shared by manual and automatic requests, including source switches.
+    if (lastRequest.current !== null && now - lastRequest.current < 60_000) {
+      if (!automatic) setError("انتظري دقيقة على الأقل بين طلبات العناوين.");
+      return;
+    }
+    lastRequest.current = now;
+    const version = selectionVersion.current;
+    locked.current = true;
+    setError("");
+    if (!automatic) { setHeadlines([]); setChecked([]); }
+    start(async () => {
+      try {
+        const result = await searchQuickNews(selectedSource.url, "ny");
+        if (!mounted.current || version !== selectionVersion.current) return;
+        if (result.ok) {
+          setHeadlines(result.items); setChecked([]);
+          setHttpPaused(previous => previous[selectedSource.id] ? { ...previous, [selectedSource.id]: false } : previous);
+          if (!result.items.length) setError("لا توجد عناوين حديثة غير محفوظة حاليًا.");
+        } else {
+          if ("errorKind" in result && (result.errorKind === "http" || result.errorKind === "redirect")) setHttpPaused(previous => ({ ...previous, [selectedSource.id]: true }));
+          setError(result.message);
+        }
+      } catch {
+        if (mounted.current && version === selectionVersion.current) setError("تعذر جلب العناوين؛ لم يُحفظ شيء.");
+      } finally { locked.current = false; }
+    });
+  }, [available, selectedSource, busy, saving, httpPaused, checked.length]);
+  useEffect(() => {
+    if (!available || !selectedSource || httpPaused[selectedSource.id]) return;
+    const timer = window.setInterval(() => discover(true), 10 * 60_000);
+    return () => window.clearInterval(timer);
+  }, [available, selectedSource, httpPaused, discover]);
+
   return <Container dir="rtl" aria-label="إعداد خبر" className={embedded ? "mb-6 rounded-2xl border border-amber-200 bg-white p-5 text-zinc-900" : "min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900"}><div className="mx-auto max-w-2xl space-y-5">
     {!embedded && <Link href="/admin" className="text-amber-800 underline">العودة إلى لوحة الإدارة</Link>}
     <Heading className="text-3xl font-bold">إعداد خبر</Heading>
-    <label className="block">المصدر<select aria-label="مصدر إعداد الخبر" className="input-style mt-2 w-full" value={sourceId} disabled={busy || saving} onChange={e=>{setSourceId(e.target.value as typeof sourceId);setHeadlines([]);setChecked([]);setError("");}}><option value="other">مصدر موثوق آخر</option>{localNewsSources.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    <label className="block">المصدر<select aria-label="مصدر إعداد الخبر" className="input-style mt-2 w-full" value={sourceId} disabled={busy || saving} onChange={e=>{selectionVersion.current++;setSourceId(e.target.value as typeof sourceId);setHeadlines([]);setChecked([]);setError("");}}><option value="other">مصدر موثوق آخر</option>{localNewsSources.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     {selectedSource && <p className="text-sm leading-7"><a href={selectedSource.url} target="_blank" rel="noopener noreferrer" className="font-bold text-amber-800 underline">فتح أخبار {selectedSource.name}</a> · {available ? "موصل العناوين مفعّل تقنيًا؛ لا نجلب المقال أو الصور، ولا يُعد التفعيل إذنًا لإعادة النشر." : "موصل RSS غير مفعّل تقنيًا. الصقي رابط الخبر ووقائعه أدناه."}{available && sourceForDirectory(selectedSource.url)?.headlineAccess !== "allowed" && <span className="block text-xs text-zinc-600">علامة المصدر: مراجعة شروط الوصول مطلوبة؛ نجاح الجلب لا يثبت الإذن.</span>}</p>}
-    {available && <div className="space-y-3"><button type="button" onClick={discover} disabled={busy || saving} className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-white">جلب أحدث 5 عناوين</button>{headlines.map(item=><label key={item.token} className="flex gap-3 rounded-xl border p-3"><input type="checkbox" checked={checked.includes(item.token)} disabled={busy} onChange={e=>setChecked(rows=>e.target.checked?[...rows,item.token]:rows.filter(token=>token!==item.token))}/><span>{item.title}<span className="block text-sm">{item.source} · {new Date(item.date).toLocaleString("ar")} · <a href={item.url} target="_blank" rel="noopener noreferrer" className="underline">المصدر</a></span></span></label>)}{checked.length>0&&<button type="button" onClick={prepareSelected} disabled={readOnly || busy || saving} className="rounded-xl border px-5 py-3">تجهيز المسودات المختارة ({checked.length})</button>}</div>}
+    {available && <div className="space-y-3"><button type="button" onClick={() => discover()} disabled={busy || saving} className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-white">جلب أحدث 5 عناوين</button>{headlines.map(item=><label key={item.token} className="flex gap-3 rounded-xl border p-3"><input type="checkbox" checked={checked.includes(item.token)} disabled={busy} onChange={e=>setChecked(rows=>e.target.checked?[...rows,item.token]:rows.filter(token=>token!==item.token))}/><span>{item.title}<span className="block text-sm">{item.source} · {new Date(item.date).toLocaleString("ar")} · <a href={item.url} target="_blank" rel="noopener noreferrer" className="underline">المصدر</a></span></span></label>)}{checked.length>0&&<button type="button" onClick={prepareSelected} disabled={readOnly || busy || saving} className="rounded-xl border px-5 py-3">تجهيز المسودات المختارة ({checked.length})</button>}</div>}
+    {available && <p role="status" className="text-xs text-zinc-600">{selectedSource && httpPaused[selectedSource.id] ? "التحديث التلقائي متوقف لهذا المصدر بسبب خطأ HTTP أو تحويلات متكررة؛ يمكنك إعادة المحاولة يدويًا بعد دقيقة." : "تحديث العناوين كل 10 دقائق أثناء ظهور التبويبة، دون حفظ أو AI؛ يتريث عند وجود أخبار محددة أو عملية جارية."}</p>}
     {prepared.map(item=><QuickDraft key={item.id} initial={item} readOnly={readOnly} origin="https://www.new-york-bel-arabi.com"/>)}
     <p>الرابط للتوثيق فقط؛ لا نجلب المقال أو الصور. اكتبي الوقائع بأسلوبك، دون لصق نص محمي. راجعي الأسماء والأرقام قبل النشر.</p>
     {readOnly && <p role="status">هذه النسخة للقراءة فقط؛ التجهيز والحفظ والنشر متوقفة.</p>}
@@ -85,6 +123,7 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
       <label className="block">ملخص الخبر<textarea name="summary" className="input-style mt-2 min-h-40 w-full" required maxLength={2000} value={draft.summary} onChange={e => setDraft({ ...draft, summary: e.target.value })} /></label>
       <input type="hidden" name="format" value="minute" /><input type="hidden" name="sourceUrl" value={draft.sourceUrl} /><input type="hidden" name="sourceName" value={draft.sourceName} /><input type="hidden" name="category" value="أخبار محلية" /><input type="hidden" name="borough" value="نيويورك" /><input type="hidden" name="imageUrl" value="" /><input type="hidden" name="publicationConfirmed" defaultValue="" />
       <input type="hidden" name="pendingOriginal" value={JSON.stringify({ title: draft.facts.split("\n")[0].slice(0, 180), summary: "", content: draft.facts, sourceUrl: draft.sourceUrl })} />
+      {requiresSourceReview(draft.sourceUrl) && <label className="flex gap-2 text-sm"><input type="checkbox" name="sourceReviewConfirmed" value="yes" key={`${draft.sourceUrl}:${draft.title}:${draft.summary}`} />{sourceReviewMessage}</label>}
       <p className="text-sm">{summaryWordCount(draft.summary)} كلمة · المقترح 40–80 كلمة.</p>
       {summaryWordCount(draft.summary)<40 && <label className="flex gap-2 text-sm"><input type="checkbox" name="shortSummaryConfirmed" value="yes" key={draft.summary} />الوقائع محدودة؛ أؤكد استخدام ملخص أقصر دون حشو أو اختلاق.</label>}
       <div className="flex flex-wrap gap-3"><button name="intent" value="draft" disabled={readOnly || saving || busy} className="rounded-xl border px-5 py-3 disabled:opacity-50">حفظ كمسودة</button><button name="intent" value="publish" disabled={readOnly || saving || busy} className="rounded-xl bg-green-700 px-5 py-3 font-bold text-white disabled:opacity-50">{saving ? "جارٍ الحفظ…" : "نشر الآن"}</button></div>

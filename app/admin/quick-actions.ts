@@ -14,6 +14,7 @@ import { aiFailureMessage } from "../../lib/ai-errors";
 import { updateArticle } from "./editor-actions";
 import { revalidatePath } from "next/cache";
 import { NewsFlowError, RssReadError, reportRss, rssCounters, skipRss } from "../../lib/rss-diagnostics";
+import { PublicationValidationError } from "../../lib/publication-policy";
 
 function flowMessage(error: unknown, stage: string) {
   if (error instanceof NewsFlowError) {
@@ -22,6 +23,7 @@ function flowMessage(error: unknown, stage: string) {
     return "حارس قاعدة البيانات لم يؤكد المطابقة؛ لم يُسمح بالاتصال.";
   }
   if (error instanceof RssReadError) {
+    if (error.kind === "redirect") return "توقف جلب RSS بسبب كثرة تحويلات الرابط؛ يلزم التحقق من رابط التغذية الرسمي.";
     if (error.kind === "http") return `أعاد مصدر RSS خطأ HTTP ${error.httpStatus ?? "غير محدد"}؛ لم نتجاوز قيود الوصول.`;
     if (error.kind === "timeout") return "انتهت مهلة مصدر RSS؛ أعيدي المحاولة لاحقًا.";
     return "تعذر الاتصال بمصدر RSS أو قراءة XML الخاص به.";
@@ -77,7 +79,7 @@ export async function searchQuickNews(sourceUrl: string, section: string) {
     return { ok: true as const, checkedAt: new Date().toISOString(), items: choices };
   } catch (error) {
     reportRss(sourceId, "discovery", stats, error instanceof NewsFlowError || error instanceof RssReadError ? error.kind : stage, error instanceof RssReadError ? error.httpStatus : undefined);
-    return { ok: false as const, message: flowMessage(error, stage) };
+    return { ok: false as const, message: flowMessage(error, stage), errorKind: error instanceof RssReadError ? error.kind : undefined };
   }
 }
 // One selected item per call keeps timeouts bounded; the client processes up to five sequentially.
@@ -138,7 +140,7 @@ export async function prepareQuickDraft(token: string, factsInput?: { facts: str
     if (saved.count !== 1) throw new Error("Revision changed");
     stats.shown = 1;
     revalidatePath("/admin");
-    return { ok:true as const, draft:{id:claimed.id,revision:1,title:draft.title,summary:draft.summary,category:item.category,sourceName:source.name},note:words<40?"المسودة مختصرة لأن المعلومات المتاحة محدودة؛ لم نضف تفاصيل للوصول إلى 40 كلمة.":undefined };
+    return { ok:true as const, draft:{id:claimed.id,revision:1,title:draft.title,summary:draft.summary,category:item.category,sourceName:source.name,sourceUrl:item.url},note:words<40?"المسودة مختصرة لأن المعلومات المتاحة محدودة؛ لم نضف تفاصيل للوصول إلى 40 كلمة.":undefined };
   } catch (error) {
     if (claimed) { revalidatePath("/admin"); return {ok:false as const,id:claimed.id,stop:Boolean(aiFailureMessage(error)),message:(aiFailureMessage(error)?.replace("لم يُحفظ أو يُنشر شيء.","لم يُنشر الخبر.") ?? flowMessage(error, stage))+" الأصل محفوظ كمسودة فقط؛ افتحي المحرر للمراجعة. لا تعيدي تجهيز الخبر من البحث."}; }
     return {ok:false as const,message:flowMessage(error, stage)};
@@ -146,15 +148,15 @@ export async function prepareQuickDraft(token: string, factsInput?: { facts: str
     reportRss(sourceId, "prepare", stats, stats.saved ? stats.shown ? "draft_ready" : "draft_saved_incomplete" : stats.skipped ? "skipped" : stage);
   }
 }
-export async function saveQuickArticle(input: {id:number;revision:number;title:string;summary:string;publish:boolean;confirmed:boolean;shortSummaryConfirmed?:boolean}) {
+export async function saveQuickArticle(input: {id:number;revision:number;title:string;summary:string;publish:boolean;confirmed:boolean;shortSummaryConfirmed?:boolean;sourceReviewConfirmed?:boolean}) {
   try {
     await admin();
     if (!Number.isSafeInteger(input.id) || input.id<=0 || !Number.isSafeInteger(input.revision) || input.revision<0 || typeof input.publish!=="boolean" || (input.publish && input.confirmed!==true)) throw new Error("Invalid save");
     const existing = await prisma.article.findUnique({where:{id:input.id}});
     if (!existing || existing.status!=="DRAFT") throw new Error("Draft required");
     const data = new FormData();
-    for (const [key,value] of Object.entries({id:String(input.id),revision:String(input.revision),title:input.title,summary:input.summary,format:"minute",category:existing.category,borough:existing.borough,sourceName:existing.sourceName??"",sourceUrl:existing.sourceUrl,imageUrl:existing.imageUrl??"",intent:input.publish?"publish":"draft",publicationConfirmed:input.confirmed?"yes":"",shortSummaryConfirmed:input.shortSummaryConfirmed===true?"yes":""})) data.set(key,value);
+    for (const [key,value] of Object.entries({id:String(input.id),revision:String(input.revision),title:input.title,summary:input.summary,format:"minute",category:existing.category,borough:existing.borough,sourceName:existing.sourceName??"",sourceUrl:existing.sourceUrl,imageUrl:existing.imageUrl??"",intent:input.publish?"publish":"draft",publicationConfirmed:input.confirmed?"yes":"",shortSummaryConfirmed:input.shortSummaryConfirmed===true?"yes":"",sourceReviewConfirmed:input.sourceReviewConfirmed===true?"yes":""})) data.set(key,value);
     await updateArticle(data,true);
     return {ok:true as const,revision:input.revision+1,published:input.publish};
-  } catch (error) { return {ok:false as const,message:error instanceof NewsFlowError ? flowMessage(error, "write") : "تعذر الحفظ أو النشر. راجعي التأكيد والحقول وإصدار المسودة في المحرر."}; }
+  } catch (error) { return {ok:false as const,message:error instanceof PublicationValidationError ? error.message : error instanceof NewsFlowError ? flowMessage(error, "write") : "تعذر الحفظ أو النشر. راجعي التأكيد والحقول وإصدار المسودة في المحرر."}; }
 }

@@ -27,3 +27,14 @@ test('legacy publish and review shortcut block English before any write; short e
 test('deletion audit logs only an ID, role, outcome and timestamp; sink failure is harmless',()=>{
  const {recordDeletionAudit}=load('lib/deletion-audit.ts'),old=console.info,rows=[];try{console.info=s=>rows.push(JSON.parse(s));recordDeletionAudit(900001,'attempt');recordDeletionAudit(900001,'deleted');assert.deepEqual(Object.keys(rows[0]).sort(),['event','articleId','actorRole','outcome','at'].sort());assert.equal(rows[1].outcome,'deleted');console.info=()=>{throw Error('sink unavailable');};assert.doesNotThrow(()=>recordDeletionAudit(900001,'failed'));}finally{console.info=old;}
 });
+test('review-flagged sources require a separate explicit acknowledgement on create, update and legacy publication',async t=>{
+ const {s,editor,legacy}=fixture(t),f=form(),url='https://abc7ny.com/fictional';s.article.sourceUrl=url;f.set('sourceUrl',url);
+ await assert.rejects(editor.createArticle(f),/راجعت الخبر الأصلي/);assert.equal(s.writes.length,0);
+ f.set('id','900001');f.set('revision','0');await assert.rejects(editor.updateArticle(f),/بأسلوبي/);assert.equal(s.writes.length,0);
+ f.set('sourceReviewConfirmed','true');await assert.rejects(editor.updateArticle(f));assert.equal(s.writes.length,0);
+ f.set('sourceReviewConfirmed','yes');await editor.updateArticle(f);assert.equal(s.writes.length,1);assert.equal(s.writes[0].data.status,'PUBLISHED');assert.equal(s.writes[0].data.originalContent,undefined);
+ s.writes.length=0;f.delete('sourceReviewConfirmed');f.set('intent','draft');await editor.updateArticle(f);assert.equal(s.writes[0].data.status,'DRAFT');
+ s.writes.length=0;s.article.status='IN_REVIEW';await assert.rejects(legacy.approveAndPublishArticle(900001),/راجعت الخبر الأصلي/);assert.equal(s.writes.length,0);
+ s.article.status='APPROVED';await assert.rejects(legacy.publishArticle(900001),/راجعت الخبر الأصلي/);assert.equal(s.writes.length,0);await legacy.publishArticle(900001,false,true);assert.equal(s.writes.length,1);
+ const policy=load('lib/news-sources.ts');assert.equal(policy.sourceForDirectory(url).headlineAccess,'restricted');assert.equal(policy.requiresSourceReview('https://abc7ny.com.evil.example/story'),false);
+});

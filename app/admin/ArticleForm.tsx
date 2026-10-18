@@ -1,6 +1,7 @@
 
 "use client";
 
+import { requiresSourceReview, sourceReviewMessage } from "../../lib/news-sources";
 import { categories, normalizeCategory } from "../../lib/categories";
 import Link from "next/link";
 import { useActionState, useRef, useState, useTransition } from "react";
@@ -193,6 +194,7 @@ export default function ArticleForm({
         >
           <input type="hidden" name="format" value="minute" />
           <input type="hidden" name="publicationConfirmed" defaultValue="" />
+          {requiresSourceReview(sourceUrl) && <label className="flex gap-2 text-sm"><input type="checkbox" name="sourceReviewConfirmed" value="yes" key={`${sourceUrl}:${title}:${summary}`} />{sourceReviewMessage}</label>}
           <input type="hidden" name="pendingOriginal" value={pendingOriginal} />
           {article && <>
             <input type="hidden" name="id" value={article.id} />

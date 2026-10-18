@@ -164,3 +164,11 @@ export function isSourceArticleUrl(source: { feedUrl: string; articlePrefix?: st
 export function canDiscoverHeadlines(source: NewsSource | undefined): boolean {
   return Boolean(source?.discovery?.automatic);
 }
+
+export const sourceReviewMessage = "أؤكد أنني راجعت الخبر الأصلي وكتبت الوقائع بأسلوبي كمحرر، دون نسخ المقال أو ترجمته كاملة دون إذن.";
+export function requiresSourceReview(sourceUrl: string): boolean {
+  try {
+    const source = sourceForDirectory(sourceUrl);
+    return Boolean(source && source.headlineAccess !== "allowed");
+  } catch { return false; } // Invalid URLs are rejected separately by article validation.
+}
