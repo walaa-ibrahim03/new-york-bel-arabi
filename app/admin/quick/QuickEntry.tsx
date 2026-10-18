@@ -17,9 +17,39 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
   const [headlines,setHeadlines] = useState<{title:string;source:string;date:string;url:string;token:string}[]>([]);
   const [checked,setChecked] = useState<string[]>([]);
   const [prepared,setPrepared] = useState<{id:number;revision:number;title:string;summary:string;category:string;sourceName:string;sourceUrl:string}[]>([]);
+  const [preparation, setPreparation] = useState<{ current: number; total: number } | null>(null);
+  const [preparationMessage, setPreparationMessage] = useState("");
+  const [preparationError, setPreparationError] = useState("");
+  const [failedDraftId, setFailedDraftId] = useState<number | null>(null);
   function prepareSelected() {
-    if(readOnly || !available || locked.current || !checked.length)return; locked.current=true;setError("");
-    start(async()=>{try {for(const item of headlines.filter(row=>checked.includes(row.token))) {const result=await prepareQuickDraft(item.token); if(!result.ok){setError(result.message);break;} setPrepared(rows=>[...rows,result.draft]); setHeadlines(rows=>rows.filter(row=>row.token!==item.token));}setChecked([]);}catch{setError("تعذر استكمال التجهيز؛ راجعي المسودات قبل إعادة المحاولة.");}finally{locked.current=false;} });
+    if (readOnly) { setPreparationError("هذه النسخة للقراءة فقط؛ تجهيز المسودات متوقف. أعيدي تحميل الصفحة للتحقق من الوضع الحالي."); return; }
+    if (locked.current || busy || saving) { setPreparationError("انتظري انتهاء العملية الجارية قبل تجهيز المسودات."); return; }
+    const selected = headlines.filter(row => checked.includes(row.token)).slice(0, 5);
+    if (!available || !selected.length) { setPreparationError("حددي خبرًا من النتائج الحالية، أو أعيدي جلب العناوين."); return; }
+    locked.current = true;
+    setPreparationError(""); setPreparationMessage(""); setFailedDraftId(null); setError("");
+    setPreparation({ current: 1, total: selected.length });
+    start(async () => {
+      let completed = 0;
+      try {
+        for (const item of selected) {
+          setPreparation({ current: completed + 1, total: selected.length });
+          const result = await prepareQuickDraft(item.token);
+          if (!result.ok) {
+            setPreparationError(result.message);
+            if (result.id) setFailedDraftId(result.id);
+            break;
+          }
+          completed++;
+          setPrepared(rows => [...rows, result.draft]);
+          setHeadlines(rows => rows.filter(row => row.token !== item.token));
+          setChecked(rows => rows.filter(token => token !== item.token));
+          setPreparationMessage(`تم تجهيز ${completed} من ${selected.length} مسودة عربية للمراجعة؛ لم يُنشر شيء.${result.note ? ` ${result.note}` : ""}`);
+        }
+      } catch {
+        setPreparationError("تعذر الاتصال بالخادم أثناء التجهيز. أعيدي تحميل الصفحة وراجعي المسودات قبل إعادة المحاولة؛ قد تكون المسودة حُفظت.");
+      } finally { locked.current = false; setPreparation(null); }
+    });
   }
   const Container = embedded ? "section" : "main";
   const Heading = embedded ? "h2" : "h1";
@@ -69,7 +99,7 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
     const version = selectionVersion.current;
     locked.current = true;
     setError("");
-    if (!automatic) { setHeadlines([]); setChecked([]); }
+    if (!automatic) { setHeadlines([]); setChecked([]); setPreparationError(""); setPreparationMessage(""); setFailedDraftId(null); }
     start(async () => {
       try {
         const result = await searchQuickNews(selectedSource.url, "ny");
@@ -96,9 +126,14 @@ export default function QuickEntry({ readOnly, source, embedded = false }: { rea
   return <Container dir="rtl" aria-label="إعداد خبر" className={embedded ? "mb-6 rounded-2xl border border-amber-200 bg-white p-5 text-zinc-900" : "min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900"}><div className="mx-auto max-w-2xl space-y-5">
     {!embedded && <Link href="/admin" className="text-amber-800 underline">العودة إلى لوحة الإدارة</Link>}
     <Heading className="text-3xl font-bold">إعداد خبر</Heading>
-    <label className="block">المصدر<select aria-label="مصدر إعداد الخبر" className="input-style mt-2 w-full" value={sourceId} disabled={busy || saving} onChange={e=>{selectionVersion.current++;setSourceId(e.target.value as typeof sourceId);setHeadlines([]);setChecked([]);setError("");}}><option value="other">مصدر موثوق آخر</option>{localNewsSources.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    <label className="block">المصدر<select aria-label="مصدر إعداد الخبر" className="input-style mt-2 w-full" value={sourceId} disabled={busy || saving} onChange={e=>{selectionVersion.current++;setSourceId(e.target.value as typeof sourceId);setHeadlines([]);setChecked([]);setError("");setPreparationError("");setPreparationMessage("");setFailedDraftId(null);}}><option value="other">مصدر موثوق آخر</option>{localNewsSources.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     {selectedSource && <p className="text-sm leading-7"><a href={selectedSource.url} target="_blank" rel="noopener noreferrer" className="font-bold text-amber-800 underline">فتح أخبار {selectedSource.name}</a> · {available ? "موصل العناوين مفعّل تقنيًا؛ لا نجلب المقال أو الصور، ولا يُعد التفعيل إذنًا لإعادة النشر." : "موصل RSS غير مفعّل تقنيًا. الصقي رابط الخبر ووقائعه أدناه."}{available && sourceForDirectory(selectedSource.url)?.headlineAccess !== "allowed" && <span className="block text-xs text-zinc-600">علامة المصدر: مراجعة شروط الوصول مطلوبة؛ نجاح الجلب لا يثبت الإذن.</span>}</p>}
-    {available && <div className="space-y-3"><button type="button" onClick={() => discover()} disabled={busy || saving} className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-white">جلب أحدث 5 عناوين</button>{headlines.map(item=><label key={item.token} className="flex gap-3 rounded-xl border p-3"><input type="checkbox" checked={checked.includes(item.token)} disabled={busy} onChange={e=>setChecked(rows=>e.target.checked?[...rows,item.token]:rows.filter(token=>token!==item.token))}/><span>{item.title}<span className="block text-sm">{item.source} · {new Date(item.date).toLocaleString("ar")} · <a href={item.url} target="_blank" rel="noopener noreferrer" className="underline">المصدر</a></span></span></label>)}{checked.length>0&&<button type="button" onClick={prepareSelected} disabled={readOnly || busy || saving} className="rounded-xl border px-5 py-3">تجهيز المسودات المختارة ({checked.length})</button>}</div>}
+    {available && <div className="space-y-3"><button type="button" onClick={() => discover()} disabled={busy || saving} className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-white">جلب أحدث 5 عناوين</button>{headlines.map(item=><label key={item.token} className="flex gap-3 rounded-xl border p-3"><input type="checkbox" checked={checked.includes(item.token)} disabled={busy} onChange={e=>setChecked(rows=>e.target.checked?[...rows,item.token]:rows.filter(token=>token!==item.token))}/><span>{item.title}<span className="block text-sm">{item.source} · {new Date(item.date).toLocaleString("ar")} · <a href={item.url} target="_blank" rel="noopener noreferrer" className="underline">المصدر</a></span></span></label>)}{(checked.length>0 || preparation)&&<button type="button" aria-label="تجهيز المسودات المختارة" aria-busy={preparation !== null} onClick={prepareSelected} disabled={readOnly || busy || saving || preparation !== null} className="rounded-xl border px-5 py-3 disabled:opacity-50">{preparation ? `جارٍ التجهيز… (${preparation.current}/${preparation.total})` : `تجهيز المسودات المختارة (${checked.length})`}</button>}
+      {preparation && <p role="status" aria-live="polite" className="text-sm">جارٍ حفظ المسودة وتجهيز النص العربي؛ انتظري حتى تظهر المعاينة.</p>}
+      {preparationMessage && <p role="status" className="text-sm text-green-800">{preparationMessage}</p>}
+      {preparationError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-800">{preparationError}</p>}
+      {failedDraftId && <Link href={`/admin/edit/${failedDraftId}`} className="block text-amber-800 underline">فتح المسودة المحفوظة للمراجعة ({failedDraftId})</Link>}
+    </div>}
     {available && <p role="status" className="text-xs text-zinc-600">{selectedSource && httpPaused[selectedSource.id] ? "التحديث التلقائي متوقف لهذا المصدر بسبب خطأ HTTP أو تحويلات متكررة؛ يمكنك إعادة المحاولة يدويًا بعد دقيقة." : "تحديث العناوين كل 10 دقائق أثناء ظهور التبويبة، دون حفظ أو AI؛ يتريث عند وجود أخبار محددة أو عملية جارية."}</p>}
     {prepared.map(item=><QuickDraft key={item.id} initial={item} readOnly={readOnly} origin="https://www.new-york-bel-arabi.com"/>)}
     <p>الرابط للتوثيق فقط؛ لا نجلب المقال أو الصور. اكتبي الوقائع بأسلوبك، دون لصق نص محمي. راجعي الأسماء والأرقام قبل النشر.</p>
