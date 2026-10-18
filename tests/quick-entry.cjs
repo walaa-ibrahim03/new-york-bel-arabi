@@ -18,7 +18,7 @@ test('quick entry uses guarded existing assistant and save paths, retains origin
 test('six local source cards expose honest manual paths, without automatic requests or government alternatives',()=>{
  const sources=load('lib/local-news-sources.ts');assert.equal(sources.localNewsSources.length,6);assert.equal(sources.selectedLocalSource('silive').name,'SILive');assert.equal(sources.selectedLocalSource('https://evil.example'),undefined);
  const s=fs.readFileSync('app/admin/LocalNewsSources.tsx','utf8');assert.ok(s.includes('/admin/quick?source='));assert.ok(s.includes('فتح أخبار المصدر'));assert.ok(s.includes('العناوين غير متاحة'));assert.ok(!s.includes('fetch('));assert.ok(!s.includes('disabled='));
- const dashboard=fs.readFileSync('app/admin/ArticlesDashboard.tsx','utf8');assert.ok(dashboard.indexOf('<LocalNewsSources />')<dashboard.indexOf('<SourceDiscovery'));assert.match(dashboard,/<details[^>]*><summary[^>]*>مصادر إضافية وحكومية/);
+ const dashboard=fs.readFileSync('app/admin/ArticlesDashboard.tsx','utf8');assert.ok(dashboard.indexOf('<QuickEntry')<dashboard.indexOf('<SourceDiscovery'));assert.match(dashboard,/<details[^>]*><summary[^>]*>خيارات إضافية/);
  const page=fs.readFileSync('app/admin/quick/page.tsx','utf8');assert.ok(page.includes('selectedLocalSource((await searchParams).source)'));
 });
 test('local source cards render six useful external links and six quick editor links in responsive layout',()=>{

@@ -28,7 +28,7 @@ test('unsafe source URLs and invalid article data rejected', () => {
   assert.throws(() => policy.validateEditorialArticle({title:'', summary:'x', content:'x', category:'عام', sourceUrl:'https://example.org'}));
 });
 test('server enforces review, approval, stale revision protection and auth', async () => {
-  const article = { id: 1, revision: 0, title:'عنوان', summary:'ملخص', content:'محتوى', category:'عام', sourceUrl:'https://example.org', status:'DRAFT', approvedAt:null, approvedBy:null };
+  const article = { id: 1, revision: 0, title:'عنوان خيالي', summary:Array(8).fill('وقائع خيالية واضحة للاختبار فقط').join(' '), content:'محتوى', category:'عام', sourceUrl:'https://example.org', status:'DRAFT', approvedAt:null, approvedBy:null };
   let authorized = true, conflict = false;
   process.env.ADMIN_EMAIL = 'admin@example.org';
   const actions = load('app/admin/actions.ts', {

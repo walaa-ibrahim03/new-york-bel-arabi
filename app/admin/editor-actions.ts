@@ -1,6 +1,7 @@
 
 "use server";
 
+import { validatePublication, PublicationValidationError } from "../../lib/publication-policy";
 import { normalizeCategory, isKnownCategory } from "../../lib/categories";
 import { validateWebUrl, validateEditorialArticle } from "../../lib/article-policy";
 import { assertNewsOperationAllowed, isNewsReadOnly } from "../../lib/database-guard";
@@ -88,7 +89,7 @@ function saveState(formData: FormData, data: ReturnType<typeof readArticle>, adm
   if (intent !== "draft") validateEditorialArticle(data);
   if (intent === "publish") {
     if (formData.get("publicationConfirmed") !== "yes") throw new Error("أكدي مراجعة النص والحقائق وحقوق النشر قبل النشر.");
-    if (!/[\u0621-\u064A]/.test(data.title) || !/[\u0621-\u064A]/.test(data.summary)) throw new Error("يجب إعداد عنوان وملخص عربيين قبل النشر.");
+    validatePublication(data, formData.get("shortSummaryConfirmed") === "yes");
     const now = new Date();
     return { status: "PUBLISHED", reviewedAt: now, reviewedBy: admin, approvedAt: now, approvedBy: admin, publishedAt: now };
   }
@@ -166,6 +167,7 @@ export async function saveArticle(_previous: { error: string }, formData: FormDa
     return { error: "" };
   } catch (error) {
     unstable_rethrow(error);
+    if (error instanceof PublicationValidationError) return { error: error.message };
     if (isNewsReadOnly()) return { error: "هذه النسخة تعمل بوضع القراءة فقط؛ لم يُحفظ الخبر." };
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") return { error: "رابط المصدر موجود لخبر آخر. راجعي الأخبار قبل الإضافة." };
     return { error: "تعذّر الحفظ. تحققي من جلسة المدير والحقول ورابط المصدر، ثم أعيدي تحميل الصفحة إذا تغيّر الخبر." };

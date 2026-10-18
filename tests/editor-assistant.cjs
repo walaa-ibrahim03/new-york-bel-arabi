@@ -37,7 +37,7 @@ test('minute editor atomically saves, reviews and publishes only after admin con
  env(t,{ADMIN_EMAIL:'admin@example.org',NYBA_NEWS_MODE:'read-write'});
  let authorized=true,stored={id:99,revision:2,status:'DRAFT',title:'عنوان قديم',summary:'ملخص قديم',content:'Legacy content must survive',category:'عام',sourceUrl:'https://example.org/news',originalTitle:'English source',originalSummary:'English summary',originalContent:'English body'},writes=0;
  const api=load('app/admin/editor-actions.ts',{'../../auth':{auth:async()=>authorized?{user:{email:'admin@example.org'}}:null},'../../lib/prisma':{prisma:{article:{findUnique:async()=>({...stored}),updateMany:async q=>{if(q.where.revision!==stored.revision)return{count:0};writes++;stored={...stored,...q.data,revision:stored.revision+1};return{count:1};},create:async q=>{writes++;stored={id:100,revision:0,...q.data};}}}},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{},unstable_rethrow:()=>{}},'../../lib/translate-news':{translateNewsToArabic:()=>{throw Error('No paid calls in save');}}});
- const f=form();f.set('format','minute');f.delete('content');f.set('intent','publish');f.delete('pendingOriginal');
+ const f=form();f.set('summary',Array(8).fill('وقائع خيالية واضحة للاختبار فقط').join(' '));f.set('format','minute');f.delete('content');f.set('intent','publish');f.delete('pendingOriginal');
  await assert.rejects(api.updateArticle(f));assert.equal(writes,0);
  f.set('publicationConfirmed','yes');authorized=false;await assert.rejects(api.updateArticle(f));assert.equal(writes,0);authorized=true;
  process.env.NYBA_NEWS_MODE='read-only';await assert.rejects(api.updateArticle(f));assert.equal(writes,0);process.env.NYBA_NEWS_MODE='read-write';

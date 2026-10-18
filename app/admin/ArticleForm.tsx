@@ -319,6 +319,7 @@ export default function ArticleForm({
           <section className="space-y-2 rounded-xl bg-slate-50 p-4" aria-label="معاينة SEO">
             <h2 className="font-bold">SEO تلقائي</h2><p>العنوان: {String(seo.title ?? "")}</p><p>الوصف: {String(seo.description ?? "")}</p><p>الكلمات المحورية: {focusKeywords(title, category).join("، ")}</p><p dir="ltr" className="break-all">{articlePath({ id: article?.id ?? 1, title })}</p><p className="text-xs">{!article && "رقم الرابط توضيحي؛ يُستبدل برقم الخبر بعد الحفظ. "}تُولّد روابط Canonical وOpen Graph والبيانات المنظمة عند العرض. الكلمات المحورية تساعد التحرير ولا تضمن الترتيب.</p>
           </section>
+          {summary.trim().split(/\s+/).length < 40 && <label className="flex gap-2 text-sm"><input type="checkbox" name="shortSummaryConfirmed" value="yes" />الوقائع محدودة؛ أؤكد استخدام ملخص أقصر دون حشو أو اختلاق.</label>}
           <p className="text-sm leading-7 text-zinc-600">حفظ المسودة لا ينشرها. «نشر الآن» يسجل مراجعتك واعتمادك ثم ينشر النص بعد التأكيد.</p>
           {saveState.error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{saveState.error}</p>}
 

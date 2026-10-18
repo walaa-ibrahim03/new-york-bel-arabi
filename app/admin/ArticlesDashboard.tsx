@@ -1,6 +1,6 @@
 
 "use client";
-import LocalNewsSources from "./LocalNewsSources";
+import QuickEntry from "./quick/QuickEntry";
 
 import { statusLabels } from "../../lib/article-policy";
 import Link from "next/link";
@@ -138,10 +138,8 @@ export default function ArticlesDashboard({
 
         </header>
 
-        <Link href="/admin/quick" className="mb-5 inline-block rounded-xl bg-amber-600 px-6 py-3 text-lg font-bold text-white">إضافة خبر سريع</Link>
-        <LocalNewsSources />
-        <p className="mb-6"><Link href="/admin/new" className="text-amber-800 underline">إضافة خبر يدويًا — المحرر المعتاد للتحرير المطول</Link></p>
-        <details className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4"><summary className="cursor-pointer font-bold">مصادر إضافية وحكومية (اختياري)</summary><div className="mt-4"><SourceDiscovery readOnly={readOnly} origin={siteOrigin} /><Link href="/admin/sources" className="text-amber-800 underline">دليل المصادر والمتابعة والجدولة</Link></div></details>
+        <QuickEntry readOnly={readOnly} embedded />
+        <details className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4"><summary className="cursor-pointer font-bold">خيارات إضافية</summary><div className="mt-4 space-y-4"><p><Link href="/admin/new" className="text-amber-800 underline">إضافة خبر يدويًا — المحرر المطوّل</Link></p><SourceDiscovery readOnly={readOnly} origin={siteOrigin} /><Link href="/admin/sources" className="text-amber-800 underline">دليل المصادر والمتابعة والجدولة</Link></div></details>
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
           <StatCard label="إجمالي الأخبار" value={visibleArticles.length} />

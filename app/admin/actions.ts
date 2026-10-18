@@ -1,6 +1,8 @@
 
 "use server";
 
+import { validatePublication } from "../../lib/publication-policy";
+import { recordDeletionAudit } from "../../lib/deletion-audit";
 import { canPublish, validateArticleId, validateEditorialArticle } from "../../lib/article-policy";
 import { assertNewsOperationAllowed, isNewsReadOnly } from "../../lib/database-guard";
 import { auth } from "../../auth";
@@ -32,12 +34,13 @@ function refreshArticle(id: number) {
   revalidatePath("/news-sitemap.xml");
 }
 
-async function transitionArticle(id: number, from: string, to: string) {
+async function transitionArticle(id: number, from: string, to: string, shortSummaryConfirmed = false) {
   const email = await requireAdmin();
   validateArticleId(id);
   const article = await prisma.article.findUnique({ where: { id } });
   if (!article || article.status !== from) throw new Error("مرحلة الخبر لا تسمح بهذه العملية.");
   if (to !== "DRAFT") validateEditorialArticle(article);
+  if (to === "PUBLISHED") validatePublication(article, shortSummaryConfirmed);
   if (to === "PUBLISHED" && !canPublish(article)) throw new Error("يجب اعتماد الخبر قبل النشر.");
   const result = await prisma.article.updateMany({
     where: { id, status: from, revision: article.revision },
@@ -60,13 +63,18 @@ export async function submitArticleForReview(id: number) {
 export async function approveArticle(id: number) {
   await transitionArticle(id, "IN_REVIEW", "APPROVED");
 }
-export async function publishArticle(id: number) {
-  await transitionArticle(id, "APPROVED", "PUBLISHED");
+export async function publishArticle(id: number, shortSummaryConfirmed = false) {
+  await transitionArticle(id, "APPROVED", "PUBLISHED", shortSummaryConfirmed);
 }
-export async function approveAndPublishArticle(id: number) {
+export async function approveAndPublishArticle(id: number, shortSummaryConfirmed = false) {
   // Explicit admin review shortcut; draft -> published remains forbidden.
+  await requireAdmin();
+  validateArticleId(id);
+  const candidate = await prisma.article.findUnique({ where: { id } });
+  if (!candidate) throw new Error("الخبر غير موجود.");
+  validatePublication(candidate, shortSummaryConfirmed);
   await transitionArticle(id, "IN_REVIEW", "APPROVED");
-  await transitionArticle(id, "APPROVED", "PUBLISHED");
+  await transitionArticle(id, "APPROVED", "PUBLISHED", shortSummaryConfirmed);
 }
 export async function unpublishArticle(id: number) {
   await transitionArticle(id, "PUBLISHED", "DRAFT");
@@ -88,9 +96,12 @@ export async function deleteArticle(id: number) {
   catch { return { ok: false, code: "UNAUTHORIZED", message: "انتهت جلسة المدير أو لا تملكين صلاحية الحذف. سجّلي الدخول مجددًا." }; }
   try { validateArticleId(id); }
   catch { return { ok: false, code: "INVALID_ID", message: "رقم الخبر غير صالح. أعيدي تحميل الصفحة." }; }
+  recordDeletionAudit(id, "attempt");
   try {
     await prisma.article.delete({ where: { id } });
+    recordDeletionAudit(id, "deleted");
   } catch (error) {
+    recordDeletionAudit(id, "failed");
     if (error instanceof Error && /^Database connection guard: (MISMATCH|UNVERIFIABLE)$/.test(error.message)) {
       return { ok: false, code: "CONNECTION_BLOCKED", message: "منع حارس الاتصال الحذف لتعذّر التحقق من قاعدة البيانات. لم يُحذف الخبر." };
     }

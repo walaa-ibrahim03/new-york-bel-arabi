@@ -59,7 +59,7 @@ function dashboardHarness(action,{readOnly=false,confirm=true}={}){
  const values=[],pending=[];let cursor=0,calls=0;
  const react={useState(initial){const i=cursor++;if(!(i in values))values[i]=initial;return[values[i],v=>{values[i]=typeof v==='function'?v(values[i]):v;}];},useMemo:fn=>fn(),useTransition:()=>[false,fn=>pending.push(Promise.resolve(fn()))]};
  const actionMocks={deleteArticle:async id=>{calls++;return action(id);}};
- const Component=load('app/admin/ArticlesDashboard.tsx',{'react':react,'react/jsx-runtime':require('react/jsx-runtime'),'next/link':{__esModule:true,default:'a'},'./LocalNewsSources':{__esModule:true,default:()=>null},'./SourceDiscovery':{__esModule:true,default:()=>null},'./actions':actionMocks}).default;
+ const Component=load('app/admin/ArticlesDashboard.tsx',{'react':react,'react/jsx-runtime':require('react/jsx-runtime'),'next/link':{__esModule:true,default:'a'},'./quick/QuickEntry':{__esModule:true,default:()=>null},'./SourceDiscovery':{__esModule:true,default:()=>null},'./actions':actionMocks}).default;
  const article=id=>({id,title:'Fictional UI row '+id,summary:'Synthetic',category:'عام',borough:'نيويورك',status:'DRAFT',createdAt:'2026-01-01T00:00:00Z'});
  function render(){cursor=0;return Component({articles:[article(900001),article(900002)],readOnly});}
  function nodes(node){if(!node||typeof node!=='object')return[];if(Array.isArray(node))return node.flatMap(nodes);return[node,...nodes(node.props?.children)];}

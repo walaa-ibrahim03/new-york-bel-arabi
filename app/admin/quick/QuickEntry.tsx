@@ -3,9 +3,15 @@ import Link from "next/link";
 import { useActionState, useRef, useState, useTransition } from "react";
 import { prepareEditorText } from "../assistant-actions";
 import { saveArticle } from "../editor-actions";
+import { localNewsSources } from "../../../lib/local-news-sources";
+import { summaryWordCount } from "../../../lib/publication-policy";
 import { quickEntryInput } from "../../../lib/quick-entry";
 
-export default function QuickEntry({ readOnly, source }: { readOnly: boolean; source?: { name: string; url: string } }) {
+export default function QuickEntry({ readOnly, source, embedded = false }: { readOnly: boolean; source?: { name: string; url: string }; embedded?: boolean }) {
+  const [sourceId, setSourceId] = useState(localNewsSources.find(item => item.name === source?.name)?.id ?? "other");
+  const selectedSource = localNewsSources.find(item => item.id === sourceId);
+  const Container = embedded ? "section" : "main";
+  const Heading = embedded ? "h2" : "h1";
   const [url, setUrl] = useState("");
   const [facts, setFacts] = useState("");
   const [draft, setDraft] = useState<{ title: string; summary: string; sourceUrl: string; sourceName: string; facts: string } | null>(null);
@@ -34,15 +40,16 @@ export default function QuickEntry({ readOnly, source }: { readOnly: boolean; so
       finally { locked.current = false; }
     });
   }
-  return <main dir="rtl" className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900"><div className="mx-auto max-w-2xl space-y-5">
-    <Link href="/admin" className="text-amber-800 underline">العودة إلى لوحة الإدارة</Link>
-    <h1 className="text-3xl font-bold">إضافة خبر سريع</h1>
-    {source && <p className="rounded-xl bg-amber-50 p-4">المصدر المختار: {source.name} · <a href={source.url} target="_blank" rel="noopener noreferrer" className="underline">فتح أخبار المصدر</a>. الصقي رابط المقال المحدد والوقائع التي راجعتِها أدناه.</p>}
+  return <Container dir="rtl" aria-label="إعداد خبر" className={embedded ? "mb-6 rounded-2xl border border-amber-200 bg-white p-5 text-zinc-900" : "min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900"}><div className="mx-auto max-w-2xl space-y-5">
+    {!embedded && <Link href="/admin" className="text-amber-800 underline">العودة إلى لوحة الإدارة</Link>}
+    <Heading className="text-3xl font-bold">إعداد خبر</Heading>
+    <label className="block">المصدر<select aria-label="مصدر إعداد الخبر" className="input-style mt-2 w-full" value={sourceId} disabled={busy || saving} onChange={e=>setSourceId(e.target.value as typeof sourceId)}><option value="other">مصدر موثوق آخر</option>{localNewsSources.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    {selectedSource && <p className="text-sm leading-7"><a href={selectedSource.url} target="_blank" rel="noopener noreferrer" className="font-bold text-amber-800 underline">فتح أخبار {selectedSource.name}</a> · متابعة مباشرة، دون جلب تلقائي. اختاري الخبر ثم الصقي رابطه ووقائعه أدناه.</p>}
     <p>الرابط للتوثيق فقط؛ لا نجلب المقال أو الصور. اكتبي الوقائع بأسلوبك، دون لصق نص محمي. راجعي الأسماء والأرقام قبل النشر.</p>
     {readOnly && <p role="status">هذه النسخة للقراءة فقط؛ التجهيز والحفظ والنشر متوقفة.</p>}
     <label className="block">رابط الخبر الأصلي<input className="input-style mt-2 w-full" type="url" dir="ltr" maxLength={2000} value={url} disabled={busy || saving} onChange={e => { setUrl(e.target.value); setDraft(null); }} /></label>
     <label className="block">الوقائع الأساسية<textarea className="input-style mt-2 min-h-40 w-full" maxLength={2500} value={facts} disabled={busy || saving} onChange={e => { setFacts(e.target.value); setDraft(null); }} /></label>
-    <button type="button" onClick={prepare} disabled={readOnly || busy || saving || !url || facts.trim().length < 30} className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? "جارٍ التجهيز…" : "تجهيز الخبر بالذكاء الاصطناعي"}</button>
+    <button type="button" onClick={prepare} disabled={readOnly || busy || saving || !url || facts.trim().length < 30} className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? "جارٍ التجهيز…" : "تجهيز بالعربية"}</button>
     <p className="text-sm text-zinc-500">ملخص 40–80 كلمة، أو أقصر إذا كانت الوقائع محدودة. SEO تلقائي. التكلفة التقديرية نحو سنت واحد لكل تجهيز؛ لا نشر تلقائي.</p>
     {(error || saved.error) && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{error || saved.error}</p>}
     {draft && <form ref={form} action={save} className="space-y-4 rounded-2xl border bg-white p-5" onSubmit={e => {
@@ -60,8 +67,10 @@ export default function QuickEntry({ readOnly, source }: { readOnly: boolean; so
       <label className="block">ملخص الخبر<textarea name="summary" className="input-style mt-2 min-h-40 w-full" required maxLength={2000} value={draft.summary} onChange={e => setDraft({ ...draft, summary: e.target.value })} /></label>
       <input type="hidden" name="format" value="minute" /><input type="hidden" name="sourceUrl" value={draft.sourceUrl} /><input type="hidden" name="sourceName" value={draft.sourceName} /><input type="hidden" name="category" value="أخبار محلية" /><input type="hidden" name="borough" value="نيويورك" /><input type="hidden" name="imageUrl" value="" /><input type="hidden" name="publicationConfirmed" defaultValue="" />
       <input type="hidden" name="pendingOriginal" value={JSON.stringify({ title: draft.facts.split("\n")[0].slice(0, 180), summary: "", content: draft.facts, sourceUrl: draft.sourceUrl })} />
+      <p className="text-sm">{summaryWordCount(draft.summary)} كلمة · المقترح 40–80 كلمة.</p>
+      {summaryWordCount(draft.summary)<40 && <label className="flex gap-2 text-sm"><input type="checkbox" name="shortSummaryConfirmed" value="yes" key={draft.summary} />الوقائع محدودة؛ أؤكد استخدام ملخص أقصر دون حشو أو اختلاق.</label>}
       <div className="flex flex-wrap gap-3"><button name="intent" value="draft" disabled={readOnly || saving || busy} className="rounded-xl border px-5 py-3 disabled:opacity-50">حفظ كمسودة</button><button name="intent" value="publish" disabled={readOnly || saving || busy} className="rounded-xl bg-green-700 px-5 py-3 font-bold text-white disabled:opacity-50">{saving ? "جارٍ الحفظ…" : "نشر الآن"}</button></div>
     </form>}
-    <p><Link href="/admin/new" className="text-amber-800 underline">فتح محرر الأخبار المعتاد</Link></p>
-  </div></main>;
+    {!embedded && <details><summary className="cursor-pointer">خيارات إضافية</summary><Link href="/admin/new" className="text-amber-800 underline">المحرر المطوّل</Link></details>}
+  </div></Container>;
 }

@@ -91,14 +91,14 @@ export async function prepareQuickDraft(token: string, factsInput?: { facts: str
     return {ok:false as const,message:"تعذر تجهيز الاختيار أو أنه مكرر/منتهي الصلاحية. أعيدي الجلب؛ لم يُنشر شيء."};
   }
 }
-export async function saveQuickArticle(input: {id:number;revision:number;title:string;summary:string;publish:boolean;confirmed:boolean}) {
+export async function saveQuickArticle(input: {id:number;revision:number;title:string;summary:string;publish:boolean;confirmed:boolean;shortSummaryConfirmed?:boolean}) {
   try {
     await admin();
     if (!Number.isSafeInteger(input.id) || input.id<=0 || !Number.isSafeInteger(input.revision) || input.revision<0 || typeof input.publish!=="boolean" || (input.publish && input.confirmed!==true)) throw new Error("Invalid save");
     const existing = await prisma.article.findUnique({where:{id:input.id}});
     if (!existing || existing.status!=="DRAFT") throw new Error("Draft required");
     const data = new FormData();
-    for (const [key,value] of Object.entries({id:String(input.id),revision:String(input.revision),title:input.title,summary:input.summary,format:"minute",category:existing.category,borough:existing.borough,sourceName:existing.sourceName??"",sourceUrl:existing.sourceUrl,imageUrl:existing.imageUrl??"",intent:input.publish?"publish":"draft",publicationConfirmed:input.confirmed?"yes":""})) data.set(key,value);
+    for (const [key,value] of Object.entries({id:String(input.id),revision:String(input.revision),title:input.title,summary:input.summary,format:"minute",category:existing.category,borough:existing.borough,sourceName:existing.sourceName??"",sourceUrl:existing.sourceUrl,imageUrl:existing.imageUrl??"",intent:input.publish?"publish":"draft",publicationConfirmed:input.confirmed?"yes":"",shortSummaryConfirmed:input.shortSummaryConfirmed===true?"yes":""})) data.set(key,value);
     await updateArticle(data,true);
     return {ok:true as const,revision:input.revision+1,published:input.publish};
   } catch { return {ok:false as const,message:"تعذر الحفظ أو النشر. تحققي من جلسة المدير والتأكيد والحقول؛ ربما تغيّرت المسودة، فافتحي محررها."}; }
